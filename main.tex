@@ -1,0 +1,2014 @@
+\documentclass[a4paper,12pt,openany]{book}
+\usepackage{amsmath,amsfonts,amssymb,amsthm,mathtools}
+\usepackage{graphicx}
+\usepackage{subcaption}
+
+\input{tools/packages.tex}
+\input{tools/styles.tex}
+\input{tools/acro.tex}
+
+\newcommand{\Graph}{\mathcal{G}}
+\newcommand{\Vertices}{\mathcal{V}}
+\newcommand{\Edges}{\mathcal{E}}
+
+\newcommand{\dict}{\boldsymbol{\Psi}}
+\newcommand{\feat}{\boldsymbol{\psi}}
+
+\newcommand{\A}{\mathbf{A}}
+\newcommand{\B}{\mathbf{B}}
+\newcommand{\C}{\mathbf{C}}
+\newcommand{\D}{\mathbf{D}}
+\newcommand{\F}{\mathbf{F}}
+\newcommand{\G}{\mathbf{G}}
+\renewcommand{\H}{\mathbf{H}}
+\newcommand{\I}{\mathbf{I}}
+\newcommand{\J}{\mathbf{J}}
+\newcommand{\K}{\mathbf{K}}
+\renewcommand{\L}{\mathbf{L}}
+\newcommand{\M}{\mathbf{M}}
+\newcommand{\N}{\mathbf{N}}
+\renewcommand{\O}{\mathbf{O}}
+\renewcommand{\P}{\mathbf{P}}
+\newcommand{\Q}{\mathbf{Q}}
+\newcommand{\Rm}{\mathbf{R}}
+\let\oldS\S
+\renewcommand{\S}{\ifmmode\mathbf{S}\else\oldS\fi}
+\newcommand{\T}{\mathbf{T}}
+\newcommand{\U}{\mathbf{U}}
+\newcommand{\V}{\mathbf{V}}
+\newcommand{\W}{\mathbf{W}}
+\newcommand{\X}{\mathbf{X}}
+\newcommand{\Y}{\mathbf{Y}}
+\newcommand{\Z}{\mathbf{Z}}
+
+\newcommand{\Complex}{\mathbb{C}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+
+\renewcommand{\a}{\mathbf{a}}
+\renewcommand{\b}{\mathbf{b}}
+\renewcommand{\c}{\mathbf{c}}
+\renewcommand{\d}{\mathbf{d}}
+\newcommand{\f}{\mathbf{f}}
+\newcommand{\g}{\mathbf{g}}
+\newcommand{\h}{\mathbf{h}}
+\renewcommand{\k}{\mathbf{k}}
+\renewcommand{\l}{\mathbf{l}}
+\newcommand{\p}{\mathbf{p}}
+\newcommand{\q}{\mathbf{q}}
+\renewcommand{\r}{\mathbf{r}}
+\newcommand{\s}{\mathbf{s}}
+\renewcommand{\t}{\mathbf{t}}
+\renewcommand{\u}{\mathbf{u}}
+\renewcommand{\v}{\mathbf{v}}
+\newcommand{\w}{\mathbf{w}}
+\newcommand{\x}{\mathbf{x}}
+\newcommand{\y}{\mathbf{y}}
+\newcommand{\z}{\mathbf{z}}
+
+\newcommand{\Eig}{\boldsymbol{\Lambda}}
+\newcommand{\Cov}{\boldsymbol{\Sigma}}
+\newcommand{\mean}{\boldsymbol{\mu}}
+\newcommand{\noise}{\boldsymbol{\epsilon}}
+\newcommand{\lh}{\boldsymbol{\lambda}}
+\newcommand{\nh}{\boldsymbol{\nu}}
+\newcommand{\eh}{\boldsymbol{\eta}}
+\renewcommand{\th}{\boldsymbol{\theta}}
+
+\newcommand{\norm}[1]{\left\|#1\right\|}
+\newcommand{\figref}[1]{\text{Fig.~}\ref{#1}}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\prox}{prox}
+\DeclareMathOperator{\Tr}{Tr}
+
+\newtheorem{definition}{Definition}[section]
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}{Proposition}[section]
+\newtheorem{assumption}{Assumption}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{remark}[theorem]{Remark}
+
+\BeforeBeginEnvironment{appendices}{\edef\TheChapter{\thechapter}}
+\AtBeginEnvironment{appendices}{\renewcommand\thesection{\TheChapter.\Alph{section}}}
+
+
+\begin{document}
+
+%%% COVER %%%
+\fancypagestyle{alim}{\fancyhf{}\renewcommand{\headrulewidth}{0pt}
+\cfoot{\includegraphics[height=2.2cm]{img/logos/logo_telecos.png}}
+}
+\thispagestyle{empty}
+\begin{center}
+{\sffamily 
+\resizebox{0.8\textwidth}{!}{\includegraphics{img/logos/upc_completo+telecos.png}}\\
+\vspace{1cm}
+{\Huge Joint graph and dictionary learning for enhanced network data representation}\\
+\vspace{0.5cm}
+{\color{black}\hrule height 1pt}
+\vspace{1cm}
+{\large{Thesis\\
+submitted to the Faculty of the \\
+Escola T\`ecnica d'Enginyeria de Telecomunicaci\'o de Barcelona \\
+Universitat Polit\`ecnica de Catalunya \\
+by\\
+\vspace{0.4cm}
+\textbf{Rachid Boukrab}}}
+
+\nocite{*} % only if you no use \cite{}
+
+\vspace{1.5cm}
+
+{In partial fulfillment\\
+of the requirements for the degree\\
+\textbf{DOCTOR OF PHILOSOPHY}}
+
+\vspace{2cm}
+
+{{Advisor: Alba Pagès-Zamora}} \\
+{{Barcelona, September 2025}}
+\thispagestyle{alim}
+}
+
+%%% INDEX %%%
+\end{center}
+\newpage
+\tableofcontents
+
+%%% LISTS %%%
+\newpage
+\listoffigures
+\lstlistoflistings
+
+\section*{Acronyms}
+
+% AIHT --- Accelerated iterative hard thresholding
+
+% BCD --- Block coordinate descent
+
+BOLD --- Blood-oxygen-level-dependent
+
+% BPDN --- Basis pursuit denoising
+
+% CoSaMP --- Compressive sampling matching pursuit
+
+DFT --- Discrete Fourier transform
+
+DL --- Dictionary learning
+
+% ECME --- Expectation-conditional maximization either
+
+% FFT --- Fast Fourier transform
+
+% FISTA --- Fast iterative shrinkage and thresholding operator
+
+fMRI --- Functional magnetic resonance imaging
+
+GMRF --- Gaussian Markov random field
+
+GSP --- Graph signal processing
+
+% HTP --- Hard thresholding pursuit
+
+% IHT --- Iterative hard thresholding
+
+% ISTA --- Iterative shrinkage and thresholding operator
+
+% KKT --- Karush-Kuhn-Tucker
+
+% LARS --- Least angle regression
+
+% LASSO --- Least absolute shrinkage and selection operator
+
+MAP --- Maximum a posteriori
+
+% MCP --- Minimax concave penalty
+
+% ML --- Maximum likelihood
+
+% MP --- Matching pursuit
+
+% NP --- Non-polynomial
+
+ODL --- Online dictionary learning
+
+% OMP --- Orthogonal matching pursuit
+
+% PCA --- Principal component analysis
+
+% QP --- Quadratic program
+
+ROI --- Region of interest
+
+% SCAD --- Smoothly clipped absolute deviation
+
+% SPG --- Stochastic projected gradient
+
+% STFT --- Short-time Fourier transform
+
+% StOMP --- Stagewise orthogonal matching pursuit
+
+% V1 --- Primary visual cortex
+
+\section*{Notation}
+
+The $D$-dimensional all-zero and all-one vectors are denoted as $\mathbf{0}_D$ and $\mathbf{1}_D$, respectively. When the dimension of these vectors is given by the context, we omit their dimension and simply write $\mathbf{0}$ and $\mathbf{1}$. The sum of the entries of a vector is denoted as
+\begin{equation}
+	\sum_{i=0}^{D-1} [\x]_i = \x^\top\mathbf{1}
+\end{equation}
+
+
+$\dict^\top$ --- transpose of matrix $\dict$
+
+$\dict^\mathsf{H}$ --- conjugate transpose of matrix $\dict$
+
+$\dict^\dagger\coloneqq (\dict^\top\dict)^{-1}\dict^\top$ --- pseudo-inverse of matrix $\dict$
+
+\subsection*{Norms}
+
+$\norm{\x}$ --- $l_2$-norm of a vector $\x$
+
+$\norm{\x}_p$ --- $l_p$-norm of a vector $\x$ with $p\neq 2$
+
+$\norm{\X}_F$ --- Frobenius norm of a matrix $\X$
+
+$\norm{\X}_2$ --- $l_2$-operator norm of a matrix $\X$
+
+$\norm{\X}_\infty\coloneqq\max_i \sum_j |[\X]_{ij}|$ --- $l_\infty$-norm of a matrix $\X$
+
+\subsection*{Vector and matrix products}
+
+$\circ$ --- Hadamard or element-wise product of matrices or vectors of same size
+
+\subsection*{Vector and matrix operators}
+
+$\mathcal{F}(\cdot)$ --- DFT of a vector
+
+$\mathcal{F}^{-1}(\cdot)$ --- Inverse DFT of a vector
+
+
+\subsection*{Derivatives}
+
+$\nabla \psi(\x)\in\R^D$ --- gradient of a scalar function $\psi:\R^D\rightarrow\R$ at $\x$, with $[\nabla \psi(\x)]_i = \partial \psi(\x)/\partial x_i$
+
+$\nabla^2 \psi(\x)\in\R^{D\times D}$ --- Hessian of $\psi$ at $\x$, with $[\nabla^2 \psi(\x)]_{ij} = \partial^2 \psi(\x)/\partial x_i\partial x_j$
+
+$\nabla^k \psi(\x)[\v_1,\ldots,\v_k]\in\R$ (for $k\geq 3$) --- the $k$-th derivative of $\psi$ at $\x$ acting as a symmetric $k$-linear form on $\v_1,\ldots,\v_k\in\R^D$, defined as the $k$-th directional derivative
+\begin{equation*}
+	\nabla^k \psi(\x)[\v_1,\ldots,\v_k] \coloneqq \frac{\partial^k}{\partial s_1\cdots\partial s_k}\bigg|_{s_1=\cdots=s_k=0}\!\!\psi\!\left(\x + \sum_{j=1}^k s_j\v_j\right) = \!\!\sum_{i_1,\ldots,i_k=1}^D\!\frac{\partial^k\psi(\x)}{\partial x_{i_1}\cdots \partial x_{i_k}}[\v_1]_{i_1}\cdots[\v_k]_{i_k}.
+\end{equation*}
+When all $k$ slots are filled by the same vector $\v$, we use the shorthand $\nabla^k \psi(\x)[\v,\ldots,\v]$. The lower-order cases $k=1$ and $k=2$ are written directly as $\v^\top\nabla\psi(\x)$ and $\v^\top\nabla^2\psi(\x)\v$, respectively.
+
+\subsection*{Operations with sets}
+
+$\oplus$ --- Orthogonal sum of subspaces
+
+
+\listoftables
+
+%%% ABSTRACT %%%
+\clearpage
+\newpage
+\section*{Abstract}
+
+{Every copy of the thesis must have an abstract. An abstract must provide a concise summary of the thesis. In style, the
+abstract should be a miniature version of the thesis: short introduction, a summary of the results, conclusions or main
+arguments presented in the thesis. The abstract may not exceed 150 words for a Degree’s thesis.}
+
+\input{introduction}
+
+% \input{gsp}
+
+\input{lap_proj}
+
+%\input{gl_smooth}
+
+%\input{gl_gmrf}
+
+%\input{dl}
+
+%\input{joint_dl_gl}
+
+%\input{result}
+
+%%% CONCLUSION AND FUTURE %%%
+%\clearpage
+%\section{Conclusions and future development: }
+%
+%{This should include your summary, conclusions and recommendations. }
+
+%%% BIBLIOGRAPHY %%%
+\newpage
+
+\medskip
+\bibliographystyle{unsrt}
+\bibliography{bibliography.bib}
+
+%%% ANNEX %%%
+\clearpage
+\newpage
+
+\begin{appendices}
+
+\section{Computation of $\nabla_{\dict} \hat{g}_t(\dict)$}
+\label{app:gradient_g_t_dict}
+
+The surrogate function $\hat{g}_t(\dict)$ is given by
+\begin{equation}\label{eq:funcionh_app}
+	\hat{g}_t(\dict) = \frac{1}{2N_b}\sum\nolimits_{n=1}^{N_b} \norm{ \Pi_\perp(\dict_{\mathcal{A}_{n,t}})\x_{n,t}}^2 
+\end{equation} 
+where $\Pi_\perp(\dict_{\mathcal{A}_n})= \I -\dict_{\mathcal{A}_n}(\dict^\top_{\mathcal{A}_n}\dict_{\mathcal{A}_n})^{-1}\dict^\top_{\mathcal{A}_n}$. The terms of the sum are of the form
+\begin{align}
+	\norm{ \Pi_\perp(\dict_{\mathcal{A}})\x}_2^2 &=\Tr(\x\x^\top-(\dict^\top_{\mathcal{A}}\dict_{\mathcal{A}})^{-1}\dict^\top_{\mathcal{A}}\x\x^\top\dict_{\mathcal{A}}) \nonumber %\\
+	%&=\Tr\left(\x\x^\top-(\S^\top_\mathcal{A}\dict^\top\dict\S_\mathcal{A})^{-1}\S^\top_\mathcal{A}\dict^\top\x\x^\top\dict\S_\mathcal{A}\right) \nonumber
+\end{align}
+where the dependence on $n$ and $t$ is dropped for the sake of clarity. The set $\mathcal{A}=\{a_1,\ldots,a_s\}$ where $\{a_l\}_{l=1}^s$ are the indexes of the columns of $\dict$ kept in $\dict_\mathcal{A}$. Let us denote $g(\dict_\mathcal{A})=\Tr(\x\x^\top-(\dict_\mathcal{A}^\top\dict_\mathcal{A})^{-1}\dict_\mathcal{A}^\top \x\x^\top\dict_\mathcal{A})$ and $\dict_\mathcal{A}=\dict\S_\mathcal{A}$, where $\S_\mathcal{A}$ is an $F \times s$ sample matrix whose $l^{th}$ column $\forall l=1,\ldots,s$ is equal to an all zero vector except for entry $(a_l,l)$ which is equal to 1. Using the chain rule, the gradient of $\norm{ \Pi_\perp(\dict_{\mathcal{A}})\x}_2^2$ with respect to $[\dict]_{ij}$ is given by
+\begin{equation}\label{eq:gradchainrule}
+	\frac{\partial g(\dict_\mathcal{A}(\dict))}{\partial [\dict]_{ij}}=\Tr \left(\left(\nabla_{\dict_\mathcal{A}}g(\dict_\mathcal{A}) \right)^\top\frac{\partial \dict_\mathcal{A}(\dict)}{\partial [\dict]_{ij}}\right)
+\end{equation}
+Using formula (126) in \cite{matrix_cookbook}, the first term is equal to 
+\begin{align}\label{eq:gradgdictA}
+	\nabla_{\dict_\mathcal{A}}g(\dict_\mathcal{A})&=-2 \Pi_\perp(\dict_\mathcal{A})\x\x^\top (\dict_\mathcal{A}^\dagger)^\top%=-2\left( \I-\dict_\mathcal{A}(\dict_\mathcal{A}^\top\dict_\mathcal{A})^{-1}\dict_\mathcal{A}^\top\right)\x\x^\top\dict_\mathcal{A}(\dict_\mathcal{A}^\top\dict_\mathcal{A})^{-1} \nonumber \\
+	% &=-2 \Pi_\perp(\dict_\mathcal{A})\x\x^\top (\dict_\mathcal{A}^\dagger)^\top
+\end{align}
+and the second one is equal to 
+\begin{equation}\label{eq:graddictAdictij}
+	\frac{\partial \dict_\mathcal{A}(\dict)}{\partial [\dict]_{ij}}=\left\{
+	\begin{array}{ll}
+		\bold{E}_{il} & \textrm{if }j \in \mathcal{A}\\
+		\bold{0}_{D\times s} & \textrm{else}
+	\end{array} \right.
+\end{equation}
+where $\bold{E}_{il}$ is an all zeros $D \times s$ matrix except for entry $(i,l)$ with $a_l=j$ that is equal to $1$. Then, substituting \eqref{eq:gradgdictA} and \eqref{eq:graddictAdictij} into \eqref{eq:gradchainrule}, we get
+\begin{equation}
+	\frac{\partial g(\dict_\mathcal{A}(\dict))}{\partial [\dict]_{ij}}=\left\{
+	\begin{array}{ll}
+		\left[-2 \Pi_\perp(\dict_\mathcal{A})\x\x^\top (\dict_\mathcal{A}^\dagger)^\top\right]_{il}& \textrm{if }j \in \mathcal{A}\\
+		0 & \textrm{else}
+	\end{array} \right.
+\end{equation}
+where $a_l=j$. This leads to
+\begin{align}
+	\nabla_{\dict}\norm{ \Pi_\perp(\dict_{\mathcal{A}})\x}_2^2&=-2 \Pi_\perp(\dict_\mathcal{A})\x\x^\top (\dict_\mathcal{A}^\dagger)^\top\S^\top_\mathcal{A}
+	=-2 (\x - \dict_\mathcal{A}\y_\mathcal{A})\y_\mathcal{A}^\top\S^\top_\mathcal{A} \nonumber \\
+	&=-2 (\x - \dict\y)\y^\top \label{eq:gradnorm2}
+\end{align}
+where $\y_\mathcal{A}\coloneqq \dict_\mathcal{A}^\dagger\x$ and $\y\coloneqq \S_\mathcal{A}\y_\mathcal{A}$. Finally, substituting the gradient \eqref{eq:gradnorm2} with dependence on $n$ and $t$ in each term of the sum in \eqref{eq:funcionh_app} yields
+\begin{equation*}
+	\nabla_{\dict} \hat{g}_t(\dict) = - \frac{1}{N_b}\sum_n (\x_{n,t} - \dict\y_{n,t})\y_{n,t}^\top 
+	= - \frac{1}{N_b} (\X_t - \dict \Y_t) \Y_t^\top
+\end{equation*}
+where $\X_t\mspace{-4mu}=\mspace{-4mu}[\x_{1,t} \ldots \x_{N_b,t}]$ and $\Y_t\mspace{-4mu}=\mspace{-4mu}[\y_{1,t} \ldots \y_{N_b,t}]$.
+
+\section{Proof of Theorem~\ref{theorem:periodic_graph}}
+\label{app:proof_periodic_theorem}
+
+We consider first $P = 2$. Without loss of generality, let us denote by $\lambda^{(rw)}$ any of the eigenvalues of $\L^{(rw)}$. This eigenvalue satisfies that $\det(\L^{(rw)}-\lambda^{(rw)}\I)=0$, which means that the rows of $\L^{(rw)}-\lambda^{(rw)}\I$ denoted by $\{\h_1^\top,\ldots,\h_D^\top\}$ are linearly dependent. Let us now inspect $\L_P^{(rw)}-\lambda^{(rw)}\I$ for $P = 2$
+\begin{equation}
+	\label{eq:Lrw_P}
+	\L_P^{(rw)}-\lambda^{(rw)}\I = \left [
+	\begin{array}{ccc}
+		\h_1^\top & \qquad\qquad\quad| & \mathbf{0}^\top \\
+		\vdots & \qquad\qquad\quad| & \vdots \\
+		\h_{D-1}^\top & \qquad\qquad\quad| & \mathbf{0}^\top \\
+		\frac{d_D}{d_D+d_1}[\h_D]_{1:D-1}^\top & (1-\lambda^{(rw)}) & \frac{d_1}{d_1+d_D}[\h_1]_{2:D}^\top \\
+		\mathbf{0}^\top & |\qquad\qquad\quad & \h_2^\top \\
+		\vdots & |\qquad\qquad\quad & \vdots \\
+		\mathbf{0}^\top & |\qquad\qquad\quad & \h_D^\top
+	\end{array}
+	\right ]
+\end{equation}
+where $\mathbf{0}$ is a zero-vector of length $D - 1$, $d_n$ is the degree of the $n^\text{th}$ vertex of the basic graph $\mathcal{G}$, and $[\h_n]_{l:m}$ is a vector built selecting from entry $l$ to entry $m$ of vector $\h_n$.
+
+As $\{\h_1^\top, \ldots, \h_D^\top\}$ are linearly dependent, there exists a set of scalars $\{\alpha_n\}_{n=1}^D$, where at least one of them different from 0, such that $\sum_{n=1}^D \alpha_n\h_n=\mathbf{0}$. Two cases can be distinguished:
+\begin{enumerate}
+	\item Both $\alpha_2,\alpha_D\neq0$. In this case, there surely exists a linear combination of $\{\h_1,\ldots,\h_{D-1}\}$ equal to $-\frac{d_D}{d_D+d_1}\h_D$ and another linear combination of $\{\h_2,\ldots,\h_D\}$ equal to $-\frac{d_1}{d_1+d_D}\h_1$. Therefore, there exists a linear combination of the $D - 1$ first and ending rows of $\L_2^{(rw)}-\I$ in~\eqref{eq:Lrw_P} equal to
+	\begin{equation}\label{eq:Lrw_Dth_row}
+		\left[-\frac{d_D}{d_D+d_1}[\h_D]_{1:D-1}^\top, \beta, -\frac{d_1}{d_1+d_D}[\h_1]_{2:D}^\top\right]
+	\end{equation}
+	where the term in the middle is equal to
+	\begin{equation}\label{eq:Lrw_beta}
+		\beta = -\frac{d_D[\h_D]_D + d_1[\h_1]_1}{d_1+d_D}
+	\end{equation}
+	As per construction of $\L_2^{(rw)}$ we have that $[\h_1]_1=[\h_D]_D=1-\lambda^{(rw)}$, and then $\beta$ in~\eqref{eq:Lrw_beta} is also $-(1-\lambda^{(rw)})$. Therefore, \eqref{eq:Lrw_Dth_row} is equal to the $D^\text{th}$ row in~\eqref{eq:Lrw_P}, which means that the rows of $\L_2^{(rw)}-\lambda^{(rw)}\I$ are linearly dependent, $\det(\L^{(rw)}-\lambda^{(rw)}\I)=0$, and $\lambda^{(rw)}$ is an eigenvalue of $\L_2^{(rw)}$ as well.
+	\item At least one of $\{\alpha_1,\ldots,\alpha_D\}$ is equal to 0. In this case, there exists a linear combination of $\{\h_1,\ldots, \h_{D-1}\}$ (and/or $\{\h_2,\ldots, \h_D\}$) that is equal to 0. This means that the
+	first (and/or last) $D-1$ rows of the matrix in~\eqref{eq:Lrw_P} are linearly dependent and, therefore, $\det(\L^{(rw)}-\lambda^{(rw)}\I)=0$ and $\lambda^{(rw)}$ is an eigenvalue of $\L_2^{(rw)}$ as well. Note that $\det(\L^{(rw)}-\lambda^{(rw)}\I)=0$ when both $\alpha_1=\alpha_D=0$.
+\end{enumerate}
+Following the same procedure, it is not difficult to prove by induction that $\lambda^{(rw)}$ is also an eigenvalue of $\L_P^{(rw)}\ \forall P>2$.
+
+% {\color{blue}
+	% \begin{equation}
+		%     \frac{\partial \dict_\mathcal{A}(\dict)}{\partial [\dict]_{ij}} = %[\mathbf{0} \ldots [\S_\mathcal{A}]^\top_{j,:}\ldots,\mathbf{0}]
+		% \end{equation}
+	% is a $D \times s$ matrix with all rows equal to $\mathbf{0}$ except %for the $i$th row, which is equal to the $j$th row of $\S_\mathcal{A}$. Therefore,
+	% \begin{equation}
+		%     \frac{\partial g(\dict_\mathcal{A}(\dict))}{\partial [\dict]_{ij}}=\left[\frac{\partial g(\dict_\mathcal{A})}{\partial\dict_\mathcal{A}}\right]_{i,:}^\top [\S_\mathcal{A}]_{j,:}
+		% \end{equation}
+	% that leads to
+	% \begin{align}
+		% \nabla_{\dict}\norm{ %\Pi_\perp(\dict_{\mathcal{A}})\x}_2^2&=\frac{\partial g(\dict_\mathcal{A})}{\partial\dict_\mathcal{A}} \S^\top_\mathcal{A} \nonumber \\
+		% &=-2 \Pi_\perp(\dict_\mathcal{A})\x\x^\top (\dict_\mathcal{A}^\dagger)^\top\S^\top_\mathcal{A} \nonumber \\
+		% &=-2 (\x - \dict_\mathcal{A}\y_\mathcal{A})\y_\mathcal{A}^\top\S^\top_\mathcal{A} \nonumber \\
+		% &=-2 (\x - \dict\y)\y^\top \nonumber
+		% \end{align}
+	% where $\y_\mathcal{A}\coloneqq \dict_\mathcal{A}^\dagger\x$ and $\y\coloneqq \S_\mathcal{A}\y_\mathcal{A}$. Finally, substituting the gradient in each term of the sum yields
+	% \begin{equation*}
+		%     \nabla_{\dict} h(\dict,\L_{g}) = \alpha\L_{g} \dict - \frac{1}{N}\sum_n (\x_n - \dict\y_n)\y_n^\top 
+		% \end{equation*}
+	% }
+%
+%% {\color{red} RACHID, aquí està lo teu
+%	% \begin{equation*}
+%		% 	\norm{(\I - \Pi(\boldsymbol{\Phi}))\x}_2^2
+%		% \end{equation*}
+%	% where in the $n$th term we set $\boldsymbol{\Phi}=\dict_{\mathcal{A}_n}$ and $\x=\x_n$. Let the function $\xi:\ \R^{D\times F}\rightarrow \R_+$ be defined by $\xi(\boldsymbol{\Phi}) \coloneqq \norm{\Pi_\perp (\boldsymbol{\Phi})\x}_2^2$, where $\Pi_\perp (\boldsymbol{\Phi})\coloneqq \I - \boldsymbol{\Phi}(\boldsymbol{\Phi}^\top\boldsymbol{\Phi})^{-1}\boldsymbol{\Phi}^\top$ denotes the orthogonal projection operator of $\boldsymbol{\Phi}$ and $\x\in\R^D$ is a constant vector. Also, define the vector function $\boldsymbol{\zeta}:\ \R^{D\times F}\rightarrow \R^{F}$ as $\boldsymbol{\zeta}(\boldsymbol{\Phi}) \coloneqq \Pi_\perp (\boldsymbol{\Phi})\x$. Then, the differential of $\xi(\boldsymbol{\Phi})$ w.r.t. $[\boldsymbol{\Phi}]_{pq}$ is given by
+%	% \begin{equation}\label{eq:partial_xi}
+%		%     \frac{\partial \xi}{\partial [\boldsymbol{\Phi}]_{pq}} = \frac{\partial \xi}{\partial \boldsymbol{\zeta}}^\top\frac{\partial \boldsymbol{\zeta}}{\partial [\boldsymbol{\Phi}]_{pq}}
+%		%     = 2\boldsymbol{\zeta}^\top \frac{\partial \boldsymbol{\zeta}}{\partial [\boldsymbol{\Phi}]_{pq}} = 2\boldsymbol{\zeta}^\top \frac{\partial \Pi_\perp (\boldsymbol{\Phi})}{\partial [\boldsymbol{\Phi}]_{pq}}\x
+%		% \end{equation}
+%	% where we have applied the chain rule. Since $\Pi_\perp (\boldsymbol{\Phi})$ is an orthogonal projection matrix, 
+%	% \begin{align*}
+%		%     &\frac{\partial \Pi_\perp (\boldsymbol{\Phi})}{\partial [\boldsymbol{\Phi}]_{pq}} = - \frac{\partial\Pi (\boldsymbol{\Phi})}{\partial [\boldsymbol{\Phi}]_{pq}} = - \Pi_\perp (\boldsymbol{\Phi}) \frac{\partial \boldsymbol{\Phi}}{\partial [\boldsymbol{\Phi}]_{pq}}\boldsymbol{\Phi}^\dagger \\
+%		%     & - {\boldsymbol{\Phi}^\dagger}^\top \frac{\partial \boldsymbol{\Phi}^\top}{\partial [\boldsymbol{\Phi}]_{pq}} \Pi_\perp (\boldsymbol{\Phi})^\top = -2\text{sym}\left(\Pi_\perp (\boldsymbol{\Phi}) \frac{\partial \boldsymbol{\Phi}}{\partial [\boldsymbol{\Phi}]_{pq}}\boldsymbol{\Phi}^\dagger\right)
+%		% \end{align*}
+%	% according to \cite[Theorem 15.11.1]{harville1998matrix}, where $\text{sym}(\X)\coloneqq (\X+\X^\top)/2$ denotes the symmetrization operator and $\Pi (\boldsymbol{\Phi})\coloneqq \boldsymbol{\Phi}(\boldsymbol{\Phi}^\top\boldsymbol{\Phi})^{-1}\boldsymbol{\Phi}^\top$ denotes the projection operator of $\boldsymbol{\Phi}$. Substituting in \eqref{eq:partial_xi} and rewriting the dot product as a Frobenius inner product, we obtain
+%	% \begin{align*}
+%		%     \frac{\partial \xi}{\partial [\boldsymbol{\Phi}]_{pq}} &= \Tr\left(-2\Pi_\perp (\boldsymbol{\Phi})\x\x^\top,2\text{sym}\left(\Pi_\perp (\boldsymbol{\Phi}) \frac{\partial \boldsymbol{\Phi}}{\partial [\boldsymbol{\Phi}]_{pq}}\boldsymbol{\Phi}^\dagger\right)\right) \\
+%		%     &= -2\Tr\left(2\text{sym}\left(\Pi_\perp (\boldsymbol{\Phi})\x\x^\top\right),\Pi_\perp (\boldsymbol{\Phi}) \frac{\partial \boldsymbol{\Phi}}{\partial [\boldsymbol{\Phi}]_{pq}}\boldsymbol{\Phi}^\dagger\right) = \\
+%		%     &\hspace{-1cm}-2\Tr\left(\Pi_\perp (\boldsymbol{\Phi})^\top\left(\Pi_\perp (\boldsymbol{\Phi})\x\x^\top + \x\x^\top\Pi_\perp (\boldsymbol{\Phi})^\top\right){\boldsymbol{\Phi}^\dagger}^\top,\frac{\partial \boldsymbol{\Phi}}{\partial [\boldsymbol{\Phi}]_{pq}}\right)
+%		% \end{align*}
+%	% where in the second equality we used $\Tr(\mathbf{A}^\top,2\text{sym}(\mathbf{B}))=\Tr(\mathbf{A}^\top,(\mathbf{B} + \mathbf{B}^\top)) = \Tr((\mathbf{A} + \mathbf{A}^\top),\mathbf{B})=\Tr(2\text{sym}(\mathbf{A}),\mathbf{B})$ and in third one the rotation property of the Frobenius inner product. Then, since 
+%	% \begin{equation*}
+%		%     \frac{\partial \xi}{\partial [\boldsymbol{\Phi}]_{pq}} = \Tr\left(\nabla_{\boldsymbol{\Phi}} \xi^\top,\frac{\partial \boldsymbol{\Phi}}{\partial [\boldsymbol{\Phi}]_{pq}}\right)
+%		% \end{equation*}
+%	% we obtain
+%	% \begin{equation}\label{eq:partial_xi_dict}
+%		%     \nabla_{\boldsymbol{\Phi}} \xi = -2\Pi_\perp (\boldsymbol{\Phi})^\top\left(\Pi_\perp (\boldsymbol{\Phi})\x\x^\top + \x\x^\top\Pi_\perp (\boldsymbol{\Phi})^\top\right){\boldsymbol{\Phi}^\dagger}^\top
+%		% \end{equation}
+%	% Now, using the following properties of projection matrices: (i) Symmetry: $\Pi_\perp (\boldsymbol{\Phi})^\top=\Pi_\perp (\boldsymbol{\Phi})$; (ii) Idempotency: $\Pi_\perp (\boldsymbol{\Phi})^2 = \Pi_\perp (\boldsymbol{\Phi})^\top$; (iii) Orthogonality $\Pi_\perp (\boldsymbol{\Phi}){\boldsymbol{\Phi}^\dagger}^\top = \mathbf{0}$; \eqref{eq:partial_xi_dict} can be simplified to
+%	% \begin{equation}\label{eq:nabla2}
+%		%     \nabla_{\boldsymbol{\Phi}} \xi = -2\Pi_\perp (\boldsymbol{\Phi})\x\x^\top{\boldsymbol{\Phi}^\dagger}^\top
+%		% \end{equation}
+%	% Finally, substituting \eqref{eq:nabla1} and \eqref{eq:nabla2} with $\boldsymbol{\Phi}=\dict_{\mathcal{A}_n}$ and $\x=\x_n$ for each $n$, we get
+%	% \begin{align*}
+%		%     &\nabla_{\dict} H(\dict,\L_{g}) = \alpha\L_{g} \dict - \frac{1}{N}\sum_n\Pi_\perp (\dict_{\mathcal{A}_n})\x_n\x_n^\top{\dict_{\mathcal{A}_n}^{\dagger}}^\top 
+%		% \end{align*}
+%	% }
+%\section{$\L_g$-update problem}
+%\label{app:Lg_update}
+%
+%The update of the generalized Laplacian matrix can be expressed as
+%\begin{align*}
+%	&\hat\L_{g,k+1} = 
+%	\argmin_{\L_g\in\R^{D\times D}} g(\L_g) + {b_k}/{2}\norm{\L_g - \hat\L_{g,k} + {1}/{b_k}\nabla_{\L_g} h(\hat\dict_{k+1},\hat\L_{g,k})}_F^2 \nonumber \\
+%	&=\argmin_{\L_g\in\mathcal{L}_g} - \log \det \L_g + \gamma \norm{\L_g \circ \bold{O}}_1 +\delta\Tr(\L_g) + \Tr (\L_g\H_{k+1})+{b_k}/{2}\norm{\L_g}_F^2 \nonumber
+%\end{align*}
+%where $\H_{k+1} \coloneqq \nabla_{\L_g} h(\hat\dict_{k+1},\hat\L_{g,k}) - b_k\hat\L_{g,k}$ and
+%$\nabla_{\L_g} h(\hat\dict_{k+1},\hat\L_{g,k}) = \frac{\alpha}{2}\hat\dict_{k+1}\hat\dict_{k+1}^\top$.
+%
+%\noindent Therefore, since $\nabla_{\L_g} h(\hat\dict_{k+1},\hat\L_{g,k})$ is constant w.r.t. $\L_g$, the Lipschitz constant is $0$. Hence, we can select $b_k=0$ and the problem simplifies to 
+%\begin{equation*}
+%	\hat\L_{g,k+1} = \argmin_{\L_g\in\mathcal{L}_g} \Tr (\L_g\S_{k+1}) - \log \det \L_g + \gamma \norm{\L_g}_1
+%\end{equation*}
+%\noindent where $\S_{k+1} = \frac{\alpha}{2}\hat\dict_{k+1}\hat\dict_{k+1}^\top + \delta \I$.
+%
+%\section{Primal variable updates}
+%\label{app:phi_update}
+%
+%The first problem is given by
+%\begin{equation*}
+%	\boldsymbol{\Omega}_{t+1} = \argmin_{\boldsymbol{\Omega}\in\R^{D\times D}} L(\boldsymbol{\Omega},\boldsymbol{\Phi}_t;\boldsymbol{\Gamma}_t,\boldsymbol{\Theta}_t)
+%\end{equation*}
+%Since $L(\boldsymbol{\Omega},\Z_t,\boldsymbol{\Phi}_t;\boldsymbol{\Gamma}_t,\boldsymbol{\Theta}_t)$ is a differentiable function in $\boldsymbol{\Omega}$, $\boldsymbol{\Omega}_{t+1}$ is given by the solution to $\nabla_{\boldsymbol{\Omega}} L(\boldsymbol{\Omega},\boldsymbol{\Phi}_t;\boldsymbol{\Gamma}_t,\boldsymbol{\Theta}_t) = -\boldsymbol{\Omega}^{-1} + \boldsymbol{\Gamma}_t = \mathbf{0}$, from where $\boldsymbol{\Omega}_{t+1} = \boldsymbol{\Gamma}_t^{-1}$. The second problem is given by
+%\begin{equation*}
+%	\boldsymbol{\Phi}_{t+1} = \argmin_{\boldsymbol{\Phi}\in\R^{D\times D}} L_{\rho_t,\eta_t}(\boldsymbol{\Omega}_{t+1},\boldsymbol{\Phi};\boldsymbol{\Gamma}_t,\boldsymbol{\Theta}_t)
+%\end{equation*}
+%In this case, $L_{\rho_t,\eta_t}(\boldsymbol{\Omega}_{t+1},\boldsymbol{\Phi};\boldsymbol{\Gamma}_t,\boldsymbol{\Theta}_t)$ is convex but non-differentiable in $\boldsymbol{\Phi}$, and therefore, the solution is given by a variable $\boldsymbol{\Phi}$ that meets $\mathbf{0} \in \partial_{\boldsymbol{\Phi}} L_{\rho_t,\eta_t}$, where
+%%\vspace{-0.5cm}
+%\begin{equation*}
+%	\begin{split}
+%		\partial_{\boldsymbol{\Phi}} L_{\rho_t,\eta_t} &= \S + \gamma\partial_{\boldsymbol{\Phi}} \norm{\boldsymbol{\Phi}\circ\mathbf{O}}_1 - \boldsymbol{\Gamma}_t + \boldsymbol{\Theta}_t\circ \partial_{\boldsymbol{\Phi}} ([\boldsymbol{\Phi}]_+\circ\mathbf{O}) \\
+%		&- \rho_t \boldsymbol{\Omega}_{t+1} + \rho_t \boldsymbol{\Phi} + \frac{\eta_t}{2} \nabla_{\boldsymbol{\Phi}} \norm{[\boldsymbol{\Phi}]_+\circ\mathbf{O}}_F^2
+%	\end{split}
+%\end{equation*}
+%is the sub-differential of $L_{\rho_t,\eta_t}(\boldsymbol{\Omega}_{t+1},\boldsymbol{\Phi};\boldsymbol{\Gamma}_t,\boldsymbol{\Theta}_t)$. Thus, the solution must satisfy
+%%\vspace{-0.3cm}
+%\begin{equation*}
+%	\begin{split}
+%		&\rho_t \boldsymbol{\Omega}_{t+1} - \S + \boldsymbol{\Gamma}_t \in  
+%		\gamma\partial_{\boldsymbol{\Phi}} \norm{\boldsymbol{\Phi}\circ\mathbf{O}}_1 + \boldsymbol{\Theta}_t\circ \partial_{\boldsymbol{\Phi}} ([\boldsymbol{\Phi}]_+\circ\mathbf{O}) + \rho_t \boldsymbol{\Phi} + \frac{\eta_t}{2} \nabla_{\boldsymbol{\Phi}} \norm{[\boldsymbol{\Phi}]_+\circ\mathbf{O}}_F^2
+%	\end{split}
+%\end{equation*}
+%The entries $\partial_{\boldsymbol{\Phi}} \norm{\boldsymbol{\Phi}}_1$ are given by
+%\begin{equation*}
+%	[\partial_{\boldsymbol{\Phi}} \norm{\boldsymbol{\Phi}\circ\mathbf{O}}_1]_{ij} = \left \{
+%	\begin{array}{cl}
+%		0 & \text{if } i = j \\
+%		\text{sign}([\boldsymbol{\Phi}]_{ij}) & \text{if } [\boldsymbol{\Phi}]_{ij} \neq 0 \text{ and } i\neq j\\
+%		\text{[-1,1]} & \text{otherwise}
+%	\end{array}
+%	\right .
+%\end{equation*}
+%Similarly, the entries of $\partial_{\boldsymbol{\Phi}} [\boldsymbol{\Phi}]_+$ are equal to
+%\begin{equation*}
+%	\left[\partial_{\boldsymbol{\Phi}} ([\boldsymbol{\Phi}]_+\circ\mathbf{O})\right]_{ij} = \left \{
+%	\begin{array}{cl}
+%		0 & \text{if } [\boldsymbol{\Phi}]_{ij} < 0 \text{ or } i=j \\
+%		\text{[0,1]} & \text{if } [\boldsymbol{\Phi}]_{ij} = 0 \text{ and } i\neq j \\
+%		1 & \text{otherwise}
+%	\end{array}
+%	\right .
+%\end{equation*}
+%Finally, the entries of $\nabla_{\boldsymbol{\Phi}} \norm{[\boldsymbol{\Phi}]_+}_F^2$ are given by
+%\begin{equation*}
+%	[\nabla_{\boldsymbol{\Phi}} \norm{[\boldsymbol{\Phi}]_+\circ\mathbf{O}}_F^2]_{ij} = \left \{
+%	\begin{array}{cl}
+%		0 & \text{if } [\boldsymbol{\Phi}]_{ij} \leq 0 \text{ or } i=j \\
+%		2[\boldsymbol{\Phi}]_{ij} & \text{otherwise}
+%	\end{array}
+%	\right .
+%\end{equation*}
+%Thus, for $i=1,\ldots,D$, we obtain $[\boldsymbol{\Phi}_{t+1}]_{ii} = \frac{1}{\rho_t}\left[\B_t\right]_{ii}$, where $\B_t\coloneqq \rho_t\left[\boldsymbol{\Omega}_{t+1}\right]_{ij}-\left[\S\right]_{ij}+\left[\boldsymbol{\Gamma}_t\right]_{ij}$, and for $i,j\in\{1,\ldots,D\}$ and $i\neq j$ we have
+%\begin{equation*}
+%	[\boldsymbol{\Phi}_{t+1}]_{ij} = A_{\gamma}\left(\left[\B_t\right]_{ij},\left[\boldsymbol{\Theta}_t\right]_{ij};\rho_t;\eta_t\right).
+%\end{equation*}
+%
+%\section{Proof of Lemma \ref{lemma:fixed_point}}
+%\label{app:fixed_point_lemma_proof}
+%
+%\noindent The problem in \eqref{eq:gl_split_equal} is 
+%\begin{align*}
+%	&\{\boldsymbol{\Omega}_\ast,\boldsymbol{\Phi}_\ast\} = \argmin_{\boldsymbol{\Omega},\boldsymbol{\Phi}\in\R^{D\times D}} p(\boldsymbol{\Omega}) + q(\boldsymbol{\Phi})
+%	\text{ s. t. }\ \boldsymbol{\Omega} = \boldsymbol{\Phi},\ \left[[\boldsymbol{\Phi}]_{ij}\right]_+ = 0,\ \forall i \neq j
+%\end{align*}
+%where $p(\boldsymbol{\Omega}) = -\log \det \boldsymbol{\Omega}$ is a strongly convex function and $q(\boldsymbol{\Phi})=\Tr (\S\boldsymbol{\Phi}) + \gamma \norm{\boldsymbol{\Phi}}_1$ is a convex function. The Lagrangian is given by
+%\begin{align}
+%	L(\boldsymbol{\Omega},\boldsymbol{\Phi};\boldsymbol{\Gamma},\boldsymbol{\Theta}) \coloneqq p(\boldsymbol{\Omega}) + q(\boldsymbol{\Phi}) + \Tr (\boldsymbol{\Gamma}^\top(\boldsymbol{\Omega}-\boldsymbol{\Phi})) \nonumber 
+%	+ \Tr (\boldsymbol{\Theta}^\top (\left[\boldsymbol{\Phi}\right]_+\circ\mathbf{O})) \label{eq:lagrangian_app}
+%\end{align}
+%where $\mathbf{O}=\mathbf{1}\mathbf{1}^\top - \I$. The Karush-Kuhn-Tucker (KKT) optimality conditions of this problem are the following 
+%\begin{enumerate}[label=(\alph*)]
+%	\item \label{kkt:primal} Primal feasibility: $\boldsymbol{\Omega}_\ast = \boldsymbol{\Phi}_\ast,\ \left[[\boldsymbol{\Phi}_\ast]_{ij}\right]_+ = 0,\ \forall i \neq j$.
+%	\item \label{kkt:stationarity_omega} Stationarity of $\boldsymbol{\Omega}_\ast$: 
+%	$\nabla_{\boldsymbol{\Omega}_\ast} L(\boldsymbol{\Omega}_\ast,\boldsymbol{\Phi}_\ast;\boldsymbol{\Gamma}_\ast,\boldsymbol{\Theta}_\ast) = \mathbf{0} \Leftrightarrow \boldsymbol{\Omega}_\ast = \boldsymbol{\Gamma}_\ast^{-1}$.
+%	\item \label{kkt:stationarity_phi} Stationarity of $\boldsymbol{\Phi}_\ast$: $\mathbf{0}\in\partial_{\boldsymbol{\Phi}_\ast} L(\boldsymbol{\Omega}_\ast,\boldsymbol{\Phi}_\ast;\boldsymbol{\Gamma}_\ast,\boldsymbol{\Theta}_\ast) \Leftrightarrow$ \\
+%	$\boldsymbol{\Gamma}_\ast - \S \in \gamma \partial_{\boldsymbol{\Phi}} \norm{\boldsymbol{\Phi}_\ast}_1 + \boldsymbol{\Theta}_\ast\circ \partial_{\boldsymbol{\Phi}} [\boldsymbol{\Phi}_\ast]_+$. That is, the diagonal entries satisfy
+%	\begin{equation*}
+%		\left \{
+%		\begin{array}{ll}
+%			\left[\boldsymbol{\Gamma}_\ast\right]_{ii} - [\S]_{ii} = -\gamma & \text{if } \left[\boldsymbol{\Phi}_\ast\right]_{ii} < 0 \\ 
+%			\left[\boldsymbol{\Gamma}_\ast\right]_{ii} - [\S]_{ii} \in [-\gamma,\gamma] & \text{if } \left[\boldsymbol{\Phi}_\ast\right]_{ii} = 0 \\
+%			\left[\boldsymbol{\Gamma}_\ast\right]_{ii} - [\S]_{ii} = \gamma & \text{if } \left[\boldsymbol{\Phi}_\ast\right]_{ii} > 0
+%		\end{array}
+%		\right .
+%	\end{equation*}
+%	Since $\left[\boldsymbol{\Phi}_\ast\right]_{ij}\leq 0$ for $\forall i\neq j$ due to \ref{kkt:primal}, the off-diagonal entries satisfy
+%	\begin{equation*}
+%		\left \{
+%		\begin{array}{ll}
+%			[\boldsymbol{\Gamma}_\ast]_{ij} - [\S]_{ij} = -\gamma & \text{if } \left[\boldsymbol{\Phi}_\ast\right]_{ij} < 0 \\ 
+%			\left[\boldsymbol{\Gamma}_\ast\right]_{ij} - [\S]_{ij} \in [-\gamma,\gamma + \left[\boldsymbol{\Theta}_\ast\right]_{ij}] & \text{if } \left[\boldsymbol{\Phi}_\ast\right]_{ij} = 0 \label{eq:stationarity_Phi_ij_equal_to_0}
+%		\end{array}
+%		\right .
+%	\end{equation*}
+%	
+%\end{enumerate}
+%
+%Lemma 3.1 in \cite{dalal2014g} proves that the diagonal entries of $\boldsymbol{\Gamma}_\ast$ are optimal if and only if they are a fixed point of the iteration $\left[\boldsymbol{\Gamma}_\ast\right]_{ii} = C_\gamma\left(\left[\B_\ast\right]_{ii}\right) + [\S]_{ii}$. Additionally, the condition $\left[\boldsymbol{\Theta}_\ast\right]_{ii}=0$ can be readily imposed $\forall i$ as only the off-diagonal entries of $\boldsymbol{\Theta}$ are Lagrange multipliers. Then, we need to prove that, $\forall i\neq j$,   $[\boldsymbol{\Gamma}_\ast]_{ij}$ and $[\boldsymbol{\Theta}_\ast]_{ij}$  are optimal if and only if they are a fixed point of the iteration 
+%\begin{align}
+%	\left[\boldsymbol{\Gamma}_\ast\right]_{ij}  &=
+%	F_{\gamma}(\left[\B_\ast\right]_{ij},\left[\boldsymbol{\Theta}_\ast\right]_{ij};\rho_t,\eta_t) + [\mathbf{S}]_{ij} \label{eq:lemma_f1}  \\
+%	\left[\boldsymbol{\Theta}_\ast\right]_{ij}  &= G_\gamma(\left[\B_\ast\right]_{ij},\left[\boldsymbol{\Theta}_\ast\right]_{ij};\rho_t,\eta_t) \label{eq:lemma_f2}
+%\end{align}
+%respectively. For clarity, recall that $\B_\ast \coloneqq \rho_t\boldsymbol{\Phi}_\ast - \S + \boldsymbol{\Gamma}_\ast \label{eq:Bast_app}$.
+%% \begin{equation*}
+%	%     F_{\gamma}(x,y;\rho,\eta) = \left \{
+%	%         \begin{array}{ll}
+%		%             -\theta_1 & \text{if } x\leq -\theta_1 \\
+%		%             x & \text{if } -\theta_1 <x \leq \theta_2 \\
+%		%             \frac{\eta}{\rho+\eta}x+\frac{\rho}{\rho+\eta}(y+\gamma) & \text{otherwise} 
+%		%         \end{array}
+%	%     \right .
+%	% \end{equation*}
+%% and $G_\gamma(x,y;\rho,\eta) \coloneqq y + \frac{\eta}{\rho+\eta}\left[x - \gamma - y\right]_+$. \\
+%
+%\noindent\textbf{If part}, $\forall i \neq j$. Starting with variables $[\boldsymbol{\Gamma}_\ast]_{ij}$ and $[\boldsymbol{\Theta}_\ast]_{ij}$ being fixed points of the functions \eqref{eq:lemma_f1} and \eqref{eq:lemma_f2}, we have to prove the KKT conditions (a)-(c). The stationarity condition of $\boldsymbol{\Omega}_\ast$ in \ref{kkt:stationarity_omega} is readily satisfied by setting $\boldsymbol{\Omega}_\ast=\boldsymbol{\Gamma}_\ast^{-1}$. The rest of the proof is divided into three cases %related to the first two parts of the function $A_\gamma(\left[\B_\ast\right]_{ij};\left[\C_\ast\right]_{ij})$ in the domain $[\B_\ast]_{ij} \leq [\C_\ast]_{ij}+\gamma$.
+%\begin{enumerate}[label=(\roman*)]
+%	\item For $\left[\B_\ast\right]_{ij} \leq - \gamma$. Using \eqref{eq:lemma_f1}, we have $\left[\boldsymbol{\Gamma}_\ast\right]_{ij} = - \gamma + \left[\S\right]_{ij}$, which satisfies the stationarity condition of $\boldsymbol{\Phi}_\ast$ in (c). Then, substituting in $\B_\ast$, we obtain $[\B_\ast]_{ij}=\rho_t [\boldsymbol{\Phi}_\ast]_{ij}-\gamma$. Since $\left[\B_\ast\right]_{ij} \leq - \gamma$, $[\boldsymbol{\Phi}_\ast]_{ij}\leq 0$ and the primal feasibility condition (a) is satisfied.
+%	
+%	% we have $\left[\boldsymbol{\Gamma}_\ast\right]_{ij} -\left[\S_n\right]_{ij}  <  - \gamma - \rho_t\left[\boldsymbol{\Phi}_\ast\right]_{ij}$, from where $\left[\boldsymbol{\Gamma}_\ast\right]_{ij} -\left[\S_n\right]_{ij} =  - \gamma$ if and only if $\left[\boldsymbol{\Phi}_\ast\right]_{ij} < 0$, which is the stationarity condition for $\left[\boldsymbol{\Phi}_\ast\right]_{ij}<0$. Then,
+%	% \begin{adjustwidth}{-0.7cm}{0pt}
+%		% \vspace{-0.5cm}
+%		% \begin{align}
+%			%     &F_\gamma([\B_\ast]_{ij};[\boldsymbol{\Theta}_\ast]_{ij}) + \left[\S_n\right]_{ij} = -\gamma + \left[\S_n\right]_{ij} = \left[\boldsymbol{\Gamma}_\ast\right]_{ij} \label{eq:lemma_a3} \raisetag{0.45cm}\\
+%			%     &G_\gamma([\B_\ast]_{ij};[\boldsymbol{\Theta}_\ast]_{ij}) = [\boldsymbol{\Theta}_\ast]_{ij} \label{eq:lemma_a4}
+%			% \end{align}
+%		%  \end{adjustwidth}
+%	
+%	\item For $-\gamma < \left[\B_\ast\right]_{ij} \leq \gamma+\left[\boldsymbol{\Theta}_\ast\right]_{ij} $. Using \eqref{eq:lemma_f1}, we have that $\left[\boldsymbol{\Gamma}_\ast\right]_{ij} = [\B_\ast]_{ij}+\left[\S\right]_{ij}$. Substituting in $\B_\ast$,  we obtain that  $[\boldsymbol{\Phi}_\ast]_{ij}= 0$ and the primal feasibility condition in (a) is satisfied. Since $[\B_\ast]_{ij} = \left[\boldsymbol{\Gamma}_\ast\right]_{ij} -\left[\S\right]_{ij}$ and $-\gamma < \left[\B_\ast\right]_{ij} \leq \gamma+\left[\boldsymbol{\Theta}_\ast\right]_{ij} $, the stationarity condition of $\boldsymbol{\Phi}_\ast$ in (c) for $[\boldsymbol{\Phi}_\ast]_{ij}= 0$ is also satisfied. 
+%	
+%	% which satisfies the stationarity condition of $\boldsymbol{\Phi}_\ast$ in (c). Then, substituting in $\B_\ast$, we obtain $[\B_\ast]_{ij}=\rho_t [\boldsymbol{\Phi}_\ast]_{ij}-\gamma$. Since $\left[\B_\ast\right]_{ij} \leq - \gamma$, $[\boldsymbol{\Phi}_\ast]_{ij}\leq 0$ and the primal feasibility condition (a) is satisfied.
+%	
+%	
+%	% we have $- \gamma - \rho_t\left[\boldsymbol{\Phi}_\ast\right]_{ij} \leq \left[\boldsymbol{\Gamma}_\ast\right]_{ij} -\left[\S_n\right]_{ij} < \gamma + [\boldsymbol{\Theta}_\ast]_{ij} - \rho_t\left[\boldsymbol{\Phi}_\ast\right]_{ij}$, from where $\left[\boldsymbol{\Gamma}_\ast\right]_{ij} -\left[\S_n\right]_{ij} \in  [- \gamma, \gamma + [\boldsymbol{\Theta}_\ast]_{ij}]$ if and only if $\left[\boldsymbol{\Phi}_\ast\right]_{ij} = 0$, which is the stationarity condition for $\left[\boldsymbol{\Phi}_\ast\right]_{ij}=0$. Then,
+%	% \begin{adjustwidth}{-0.7cm}{0pt}
+%		% \vspace{-0.5cm}
+%		% \begin{small}
+%			% \begin{align}
+%				%     &F_\gamma([\B_\ast]_{ij};[\boldsymbol{\Theta}_\ast]_{ij}) + \left[\S_n\right]_{ij} = [\B_\ast]_{ij} + \left[\S_n\right]_{ij} = \left[\boldsymbol{\Gamma}_\ast\right]_{ij} \label{eq:lemma_a3} \raisetag{0.45cm}\\
+%				%     &G_\gamma([\B_\ast]_{ij};[\boldsymbol{\Theta}_\ast]_{ij}) = [\boldsymbol{\Theta}_\ast]_{ij} \label{eq:lemma_a4}
+%				% \end{align}
+%			% \end{small}
+%		% \end{adjustwidth}
+%	
+%	\item For $\left[\B_\ast\right]_{ij}> \gamma+\left[\boldsymbol{\Theta}_\ast\right]_{ij} $. Using \eqref{eq:lemma_f1}, we obtain 
+%	\begin{small}
+%		\begin{align*}
+%			\left[\boldsymbol{\Gamma}_\ast\right]_{ij} &= \frac{\eta_t}{\rho_t+\eta_t}[\B_\ast]_{ij}+\frac{\rho_t}{\rho_t+\eta_t}(\gamma + \left[\boldsymbol{\Theta}_\ast\right]_{ij})+\left[\S\right]_{ij} \\
+%			&> \frac{\eta_t}{\rho_t+\eta_t}(\gamma+\left[\boldsymbol{\Theta}_\ast\right]_{ij})+\frac{\rho_t}{\rho_t+\eta_t}(\gamma + \left[\boldsymbol{\Theta}_\ast\right]_{ij})+\left[\S\right]_{ij} 
+%			= \gamma+\left[\boldsymbol{\Theta}_\ast\right]_{ij} +\left[\S\right]_{ij}
+%		\end{align*}
+%	\end{small}
+%	
+%	\noindent from where $\left[\boldsymbol{\Gamma}_\ast\right]_{ij} - \left[\S\right]_{ij} > \gamma+\left[\boldsymbol{\Theta}_\ast\right]_{ij}$. However, since this region is out of the domain of the KKT conditions, this is why we restrict the domain to be $\left[\B_\ast\right]_{ij}\leq \gamma+\left[\boldsymbol{\Theta}_\ast\right]_{ij} $.  
+%\end{enumerate}
+%\noindent This completes the proof of the \emph{if} part.
+%
+%\noindent\textbf{Only if part}, $\forall i \neq j$. Assuming that the KKT conditions \ref{kkt:primal}-\ref{kkt:stationarity_phi} are satisfied, we have to prove that $[\boldsymbol{\Gamma}_\ast]_{ij}$ and $[\boldsymbol{\Theta}_\ast]_{ij}$  are fixed points of the iterations \eqref{eq:lemma_f1} and \eqref{eq:lemma_f2}. Since $[\boldsymbol{\Phi}_\ast]_{ij} \leq 0$ $\forall i \neq j$ as per \ref{kkt:primal}, the proof is divided into two cases: (i) $[\boldsymbol{\Phi}_\ast]_{ij}<0$, and (ii) $[\boldsymbol{\Phi}_\ast]_{ij}=0$. In both cases, $\boldsymbol{\Omega}_\ast=\boldsymbol{\Phi}_\ast=\boldsymbol{\Gamma}_\ast^{-1}$ according to \ref{kkt:primal} and \ref{kkt:stationarity_omega}. 
+%\begin{enumerate}[label=(\roman*)]
+%	\item For $\left[\boldsymbol{\Phi}_\ast\right]_{ij} < 0$. In this case,  $\left[\boldsymbol{\Gamma}_\ast\right]_{ij} - \left[\S\right]_{ij} = -\gamma$ using \ref{kkt:stationarity_phi}. Under these conditions, $[\B_\ast]_{ij} \coloneqq [\rho_t\boldsymbol{\Phi}_\ast - \S + \boldsymbol{\Gamma}_\ast]_{ij}=[\rho_t\boldsymbol{\Phi}_\ast]_{ij} -\gamma < - \gamma$, and therefore, 
+%	\begin{equation*}
+%		F_{\gamma}(\left[\B_\ast\right]_{ij},\left[\boldsymbol{\Theta}_\ast\right]_{ij};\rho_t,\eta_t) + \left[\S\right]_{ij} = -\gamma + \left[\S\right]_{ij} = [\boldsymbol{\Gamma}_\ast]_{ij}   
+%	\end{equation*}
+%	and $G_\gamma(\left[\B_\ast\right]_{ij},\left[\boldsymbol{\Theta}_\ast\right]_{ij};\rho_t,\eta_t) = [\boldsymbol{\Theta}_\ast]_{ij}$.
+%	
+%	\item For $\left[\boldsymbol{\Phi}_\ast\right]_{ij} = 0$. In this case, $\left[\boldsymbol{\Gamma}_\ast\right]_{ij} - \left[\S\right]_{ij} \in [-\gamma,\gamma+\left[\boldsymbol{\Theta}_\ast\right]_{ij}]$ using \ref{kkt:stationarity_phi}. Under these conditions, $[\B_\ast]_{ij} \coloneqq  [\rho_t\boldsymbol{\Phi}_\ast - \S + \boldsymbol{\Gamma}_\ast]_{ij}=[\boldsymbol{\Gamma}_\ast - \S]_{ij}$. Then, 
+%	\begin{equation*}
+%		F_{\gamma}(\left[\B_\ast\right]_{ij},\left[\boldsymbol{\Theta}_\ast\right]_{ij};\rho_t,\eta_t) + \left[\S\right]_{ij} = [\B_\ast]_{ij} + \left[\S\right]_{ij} = \left[\boldsymbol{\Gamma}_\ast\right]_{ij}    
+%	\end{equation*}
+%	and \eqref{eq:lemma_f1} is satisfied. Similarly, $G_\gamma(\left[\B_\ast\right]_{ij},\left[\boldsymbol{\Theta}_\ast\right]_{ij};\rho_t,\eta_t) = [\boldsymbol{\Theta}_\ast]_{ij}$ and \eqref{eq:lemma_f2} is satisfied.
+%\end{enumerate}
+%\noindent This completes the proof of the \emph{only if} part.
+%
+%\section{Proof of Lemma \ref{lemma:sq_diff_A}}
+%\label{app:gl_lemma2_proof}
+%
+%For the sake of simplicity, in this proof we denote $\rho=\rho_t$, $\eta=\eta_t$, $x_1=[\B_t]_{ij}$, $x_2=[\B_\ast]_{ij}$, $y_1=[\boldsymbol{\Theta}_t]_{ij}$ and $y_2=[\boldsymbol{\Theta}_\ast]_{ij}$, where $y_2>y_1\geq 0$. Define
+%\begin{align*}
+%	d^2(x_1,y_1;x_2,y_2) &\coloneqq (F_\gamma(x_2,y_2;\rho,\eta) -  F_\gamma(x_1,y_1;\rho,\eta))^2 \\
+%	&+ (G_\gamma(x_2,y_2;\rho,\eta) - G_\gamma(x_1,y_1;\rho,\eta))^2
+%\end{align*}
+%Since $x_2\leq y_2+\gamma$, the proof is divided into six cases depending on the range of $\{x_1$, $y_1$, $x_2$, $y_2\}$, and the inequality of Lemma \ref{lemma:sq_diff_A} is verified for each one.
+%\begin{enumerate}[label=(\alph*)]
+%	
+%	\item $x_1 < -\gamma,\ x_2 < -\gamma$
+%	\begin{adjustwidth}{-0.7cm}{0pt}
+%		\vspace{-0.5cm}
+%		\begin{align*}
+%			d^2 = (-\gamma-(-\gamma))^2 + (y_2-y_1)^2 = (y_2-y_1)^2 \leq (x_2-x_1)^2 + (y_2-y_1)^2
+%		\end{align*}
+%	\end{adjustwidth}
+%	
+%	\item $x_1 < -\gamma,\ -\gamma \leq x_2 < y_2+\gamma$
+%	\begin{adjustwidth}{-0.7cm}{0pt}
+%		\vspace{-0.5cm}
+%		\begin{align*}
+%			d^2 = (x_2-(-\gamma))^2 + (y_2-y_1)^2 \leq (x_2-x_1)^2 + (y_2-y_1)^2
+%		\end{align*}
+%	\end{adjustwidth}
+%	%\vspace{-0.2cm}
+%	where in the inequality we use $ x_1 < -\gamma$.
+%	
+%	\item $-\gamma \leq x_1 < y_1+\gamma,\ x_2< -\gamma$
+%	\begin{adjustwidth}{-0.7cm}{0pt}
+%		\vspace{-0.5cm}
+%		\begin{align*}
+%			d^2 = (-\gamma-x_1)^2 + (y_2-y_1)^2 
+%			\leq (x_2-x_1)^2 + (y_2-y_1)^2
+%		\end{align*}
+%	\end{adjustwidth}
+%	%\vspace{-0.2cm}
+%	where in the inequality we use $ x_2 < -\gamma$.
+%	
+%	\item $-\gamma \leq x_1 < y_1+\gamma,\ -\gamma \leq x_2 < y_2+\gamma$: $d^2 = (x_2-x_1)^2 + (y_2-y_1)^2$.
+%	
+%	
+%	\item $y_1+\gamma \leq x_1,\ x_2 < -\gamma$    	
+%	\begin{adjustwidth}{-1cm}{0pt}
+%		\vspace{-0.5cm}
+%		\begin{small}
+%			\begin{align*}
+%				d^2 &= \left(-\gamma-\frac{\eta}{\rho+\eta}x_1-\frac{\rho}{\rho+\eta}(\gamma+y_1)\right)^2 +\left(y_2-\frac{\rho}{\rho+\eta}y_1-\frac{\eta}{\rho+\eta}(x_1-\gamma)\right)^2 \\
+%				&\leq \left(x_2-\frac{\eta}{\rho+\eta}x_1-\frac{\rho}{\rho+\eta}(\gamma+y_1)\right)^2 + \left(y_2-\frac{\rho}{\rho+\eta}y_1-\frac{\eta}{\rho+\eta}(x_1-\gamma)\right)^2
+%			\end{align*}
+%		\end{small}
+%	\end{adjustwidth}
+%	%\vspace{-0cm}
+%	where in the inequality we used $0<y_1+\gamma \leq x_1$ and $x_2<-\gamma < 0$.
+%	\item $y_1+\gamma \leq x_1,-\gamma\leq\ x_2 < y_2+\gamma$
+%	\begin{adjustwidth}{-1cm}{0pt}
+%		\vspace{-0.5cm}
+%		\begin{small}
+%			\begin{align*}
+%				d^2 = \left(x_2 -\frac{\eta}{\rho+\eta}x_1-\frac{\rho}{\rho+\eta}(\gamma+y_1)\right)^2
+%				+\left(y_2-\frac{\rho}{\rho+\eta}y_1-\frac{\eta}{\rho+\eta}(x_1-\gamma)\right)^2 
+%			\end{align*}
+%		\end{small}
+%	\end{adjustwidth}
+%	%\vspace{-0cm}
+%	%where in the inequality we used $0<y_1+\gamma \leq x_1$ and $x_2<-\gamma < 0$.}
+%	\end{enumerate}
+%	Therefore, in cases (e) and (f), we have
+%	\begin{align*}
+%&d^2 \leq \left(x_2-\frac{\eta}{\rho+\eta}x_1-\frac{\rho}{\rho+\eta}(\gamma+y_1)\right)^2 +
+%\left(y_2-\frac{\rho}{\rho+\eta}y_1-\frac{\eta}{\rho+\eta}(x_1-\gamma)\right)^2 \nonumber \\ &=(x_2-x_1)^2+(y_2-y_1)^2
+%+ \frac{\rho^2+\eta^2}{(\rho+\eta)^2}\Delta_1^2 + 2\frac{\rho}{\rho+\eta}\Delta_1(x_2-x_1) - 2\frac{\eta}{\rho+\eta}\Delta_1(y_2-y_1))
+%\end{align*}
+%where $\Delta_1 = x_1-y_1-\gamma \ge 0$. Since $y_2\geq y_1$ and $\eta\geq \rho$, we obtain 
+%\begin{align*}
+%d^2 &\leq (x_2-x_1)^2+(y_2-y_1)^2 + \frac{\rho^2+\eta^2}{(\rho+\eta)^2}\Delta_1^2 - 2\frac{\rho}{\rho+\eta}\Delta_1(x_1-x_2+y_2-y_1) \\
+%&=(x_1-x_2)^2 + (y_1-y_2)^2 + \frac{\rho^2+\eta^2}{(\rho+\eta)^2}\Delta_1^2 
+%-2\frac{\rho}{\rho+\eta}\Delta_1(\Delta_1+y_2-x_2 + \gamma)
+%\end{align*}
+%Since $x_2 < y_2+\gamma \Leftrightarrow y_2-x_2+\gamma > 0$,
+%\begin{equation*}
+%d^2 \leq (x_1-x_2)^2 + (y_1-y_2)^2 + \frac{\rho^2+\eta^2-2\rho(\rho+\eta)}{(\rho+\eta)^2}\Delta_1^2
+%\end{equation*}
+%The roots of the equation $\rho^2+\eta^2-2\rho(\rho+\eta)=0$ are $\eta=(1\pm\sqrt{2})\rho$, and therefore, $\rho^2+\eta^2-2\rho(\rho+\eta)\leq0$ for $\eta\in[(1-\sqrt{2})\rho,(1+\sqrt{2})\rho]$. Therefore, for $\eta\in[\rho,(1+\sqrt{2})\rho]$, $d^2 \leq (x_1-x_2)^2 + (y_1-y_2)^2$, what concludes the proof.
+%
+%
+%%, since we assume that $\eta \geq \rho$ for this analysis, the range of valid values is $\eta\in[\rho,(1+\sqrt{2})\rho]$, for which $d^2 \leq (x_1-x_2)^2 + (y_1-y_2)^2$, what concludes the proof. 
+%
+%
+%
+%
+%\section{Proof of Theorem \ref{theorem:gl_theorem1}}
+%\label{app:gl_theorem1_proof}
+%
+%\noindent The recurrence relation between $\boldsymbol{\Sigma}_{t+1}$ and $\boldsymbol{\Sigma}_{t}$ is given by \eqref{eq:gl_dual_update}
+%\begin{equation}
+%\boldsymbol{\Sigma}_{t+1} = \left [
+%\begin{array}{l}
+%	\B_{t}\circ\I + F_\gamma(\B_{t};\boldsymbol{\Theta}_{t})\circ\mathbf{O} + \S \\
+%	G_\gamma(\B_{t};\boldsymbol{\Theta}_{t})\circ\mathbf{O}
+%\end{array}
+%\right ]
+%\end{equation}
+%As a consequence of Lemma \ref{lemma:fixed_point}, the optimal dual variables $\boldsymbol{\Sigma}_\ast\coloneqq [\boldsymbol{\Gamma}_\ast^\top\ \boldsymbol{\Theta}_\ast^\top]^\top$ are a fixed point of the function
+%\begin{equation}
+%\boldsymbol{\Sigma}_\ast = \left [
+%\begin{array}{l}
+%	\B_\ast\circ\I + F_\gamma(\B_\ast;\boldsymbol{\Theta}_\ast)\circ\mathbf{O} + \S \\
+%	G_\gamma(\B_\ast;\boldsymbol{\Theta}_\ast)\circ\mathbf{O}
+%\end{array}
+%\right ]
+%\end{equation}
+%Consequently, the distance between $\boldsymbol{\Sigma}_{t+1}$ and $\boldsymbol{\Sigma}_\ast$ is given by
+%\begin{align*}
+%\norm{\boldsymbol{\Sigma}_{t+1}-\boldsymbol{\Sigma}_\ast}_F^2 = 
+%\norm{(\B_{t}-\B_\ast)\circ\I}_F^2 + 
+%&\norm{(F_\gamma(\B_{t};\boldsymbol{\Theta}_t)-F_\gamma(\B_\ast;\boldsymbol{\Theta}_\ast))\circ\mathbf{O}}_F^2 + \\
+%+&\norm{(G_\gamma(\B_{t};\boldsymbol{\Theta}_t)-G_\gamma(\B_\ast;\boldsymbol{\Theta}_\ast))\circ\mathbf{O}}_F^2
+%\end{align*}
+%Given \eqref{eq:th_dual_update}, the sequence $\{\boldsymbol{\Theta}_t\}$ is non-decreasing, i.e.,  $\boldsymbol{\Theta}_\ast\geq \boldsymbol{\Theta}_t\ \forall t$. Also, in each iteration, $\boldsymbol{\Theta}_{t+1}$ accumulates the positive elements of $\boldsymbol{\Phi}_t$, and therefore, we also have $\boldsymbol{\Theta}_\ast\geq \B_t\ \forall t$. Moreover, according to the stationarity condition of $\boldsymbol{\Phi}_\ast$ in Lemma \ref{lemma:fixed_point}.(c), $\left[\boldsymbol{\Gamma}_\ast\right]_{ij} - [\S]_{ij} \leq \gamma + \left[\boldsymbol{\Theta}_\ast\right]_{ij}$, and according to the primal feasibility condition in Lemma \ref{lemma:fixed_point}.(a), $[\boldsymbol{\Phi}_\ast]_{ij}\leq 0$. Consequently, $[\B_\ast]_{ij}=[\rho_t\boldsymbol{\Phi}_\ast-\S+\boldsymbol{\Gamma}_\ast]_{ij}\leq \gamma + \left[\boldsymbol{\Theta}_\ast\right]_{ij}$. Thus, under Lemma \ref{lemma:sq_diff_A}, we obtain the bound
+%\begin{equation*}
+%\begin{split}
+%	\norm{\boldsymbol{\Sigma}_{t+1}-\boldsymbol{\Sigma}_\ast}_F^2 &\leq 
+%	\norm{(\B_{t} - \B_\ast)\circ\I}_F^2 + 
+%	\norm{(\B_{t} - \B_\ast)\circ\mathbf{O}}_F^2 + \norm{(\boldsymbol{\Theta}_t - \boldsymbol{\Theta}_\ast)\circ\mathbf{O}}_F^2 \\
+%	&=\norm{\B_{t} - \B_\ast}_F^2 + \norm{\boldsymbol{\Theta}_t - \boldsymbol{\Theta}_\ast}_F^2
+%\end{split} 
+%\end{equation*}
+%where in the equality we use that $[\boldsymbol{\Theta}_t]_{ii}=[\boldsymbol{\Theta}_\ast]_{ii}=0\ \forall i$. Since $\B_t = \rho_t\boldsymbol{\Gamma}_t^{-1} - \S + \boldsymbol{\Gamma}_t$ and $\B_\ast = \rho_t\boldsymbol{\Gamma}_\ast^{-1} - \S + \boldsymbol{\Gamma}_\ast$, the distance $\norm{\B_{t} - \B_\ast}_F$ is bounded by 
+%\begin{equation*}\label{eq:B_t_bound}
+%\norm{\B_{t} - \B_\ast}_F \leq \xi_t \norm{\boldsymbol{\Gamma}_t - \boldsymbol{\Gamma}_\ast}_F 
+%\end{equation*}
+%following \cite[Theorem 3.5]{dalal2014g}, where $\xi_t\coloneqq \max\left(\left|1-\frac{\rho_t}{c_t^2}\right|,\left|1-\frac{\rho_t}{d_t^2}\right|\right)$, \\
+%$c_t \coloneqq \min\left(\lambda_{\min}^{(t)}, \lambda_{\min}^{(\ast)}\right)$ and $d_t \coloneqq \max\left(\lambda_{\max}^{(t)}, \lambda_{\max}^{(\ast)}\right)$. Therefore, 
+%%\vspace{-0.4cm}
+%\begin{small}
+%\begin{align*}
+%	\norm{\boldsymbol{\Sigma}_{t+1}-\boldsymbol{\Sigma}_\ast}_F^2 \leq \xi_{t}^2\norm{\boldsymbol{\Gamma}_{t} - \boldsymbol{\Gamma}_\ast}_F^2 + \norm{\boldsymbol{\Theta}_{t}- \boldsymbol{\Theta}_\ast}_F^2
+%\end{align*}
+%\end{small}
+%or equivalently, $\norm{\boldsymbol{\Sigma}_{t+1}-\boldsymbol{\Sigma}_\ast}_F^2 \leq 
+%\tau_t^2 \norm{\boldsymbol{\Sigma}_{t}- \boldsymbol{\Sigma}_\ast}_F^2$, where
+%\begin{equation*}
+%\tau_t^2\coloneqq\frac{\xi_t^2\norm{\boldsymbol{\Gamma}_t - \boldsymbol{\Gamma}_\ast}_F^2 + \norm{\boldsymbol{\Theta}_t- \boldsymbol{\Theta}_\ast}_F^2}{\norm{\boldsymbol{\Gamma}_t - \boldsymbol{\Gamma}_\ast}_F^2 + \norm{\boldsymbol{\Theta}_t- \boldsymbol{\Theta}_\ast}_F^2}
+%\end{equation*}
+%\noindent If $\rho_t=c_t^2$, then $0\leq\xi_t<1$. Consequently $0\leq\tau_t<1$, and the algorithm exhibits linear convergence. 
+%
+
+\section{Efficient computation of the KKT system in the active-set method}
+\label{app:active_set_kkt}
+
+The problem in~\eqref{eq:as_subproblem} can be written compactly as
+\begin{equation}
+	\lh_\mathcal{W}=\argmin_{\lh\in\R^{D_+}}\tfrac{1}{2}\lh^\top\P\lh-\q^\top\lh
+	\quad\text{s.t.}\quad\tilde{\A}_\mathcal{W}\lh=\tilde{\b}_\mathcal{W}.
+\end{equation}
+Since $\P\succ\mathbf{0}$, this problem admits a closed-form solution via its KKT system
+\begin{equation}\label{eq:as_kkt}
+	\M_\mathcal{W}
+	\begin{bmatrix}
+		\lh_\mathcal{W} \\
+		\boldsymbol{\nu}_\mathcal{W}
+	\end{bmatrix}
+	=
+	\begin{bmatrix}
+		\q \\
+		\tilde{\b}_\mathcal{W}
+	\end{bmatrix},\quad 
+	\text{where}\ \
+	\M_\mathcal{W}\coloneqq\begin{bmatrix}
+		\P & \tilde{\A}_\mathcal{W}^\top \\
+		\tilde{\A}_\mathcal{W} & \mathbf{0}
+	\end{bmatrix},
+\end{equation}
+$\boldsymbol{\nu}_\mathcal{W}\in\R^{D + 1 + |\mathcal{W}|}$ collects the multipliers of the stacked constraints. Because $\P=\beta\D^\top\D$ is diagonal, its inversion costs only $\mathcal{O}(D_+)$. Denoting the KKT matrix in~\eqref{eq:as_kkt} by $\M_\mathcal{W}$, its Schur complement with respect to $\P$ is
+\begin{equation}\label{eq:active_set_schur_comp}
+	\M_\mathcal{W}|\P = -\tilde{\A}_\mathcal{W}\P^{-1}\tilde{\A}_\mathcal{W}^\top = -\begin{bmatrix}\A\\\B_\mathcal{W}\end{bmatrix}\P^{-1}\begin{bmatrix}\A^\top & \B_\mathcal{W}^\top\end{bmatrix}=  -\begin{bmatrix}\A\P^{-1}\A^\top & \A\P^{-1}\B_\mathcal{W}^\top \\ \B_\mathcal{W}\P^{-1}\A^\top & \B_\mathcal{W}\P^{-1}\B_\mathcal{W}^\top\end{bmatrix}
+\end{equation}
+which is a $(D+1+|\mathcal{W}|)\times(D+1+|\mathcal{W}|)$ dense matrix in general. The inverse of the KKT block matrix can be written explicitly as
+\begin{equation}
+	\M_\mathcal{W}^{-1} = 
+	\begin{bmatrix}
+		\P^{-1}+\P^{-1}\tilde{\A}_\mathcal{W}^\top(\M_\mathcal{W}|\P)^{-1}\tilde{\A}_\mathcal{W}\P^{-1} & -\P^{-1}\tilde{\A}_\mathcal{W}^\top(\M_\mathcal{W}|\P)^{-1} \\
+		-(\M_\mathcal{W}|\P)^{-1}\tilde{\A}_\mathcal{W}\P^{-1} & (\M_\mathcal{W}|\P)^{-1}
+	\end{bmatrix}.	
+\end{equation}
+Because $\P$ is diagonal and the constraint matrices $\A$ and $\B$ possess highly structured sparsity patterns, the blocks appearing in the Schur complement admit closed-form expressions and its inverse can be maintained incrementally via rank-1 updates as the working set changes.
+
+Because $\P$ is diagonal, $\P^{-1}=\text{diag}(1, \underbrace{1/2,\ldots,1/2}_{D-1},1, \underbrace{1/2,\ldots,1/2}_{D-2},1,\ldots,1,1/2,1)$, and therefore, 
+\begin{equation}
+\setlength{\arraycolsep}{0pt}
+\begin{array}{c}
+\multicolumn{1}{l}{\A\P^{-1}\A^\top=} \\[-15pt]
+	\resizebox{\textwidth}{!}{$\displaystyle
+	\left[
+	\vcenter{\hbox{\begin{tikzpicture}[
+		baseline=(current bounding box.center),
+		scale=0.15,
+		font=\scriptsize
+	]
+		\def\D{7}                 % change to any D >= 3
+		\def\barH{3}              % bar height = stagger = zero-col width = trace-cell size
+		% wj = (D-j)*barH  (zero-column is barH wide, trace cell is barH x barH)
+		% cj = barH * j*(2D-j+1)/2
+		% Dplus = barH * D*(D+1)/2
+		\pgfmathtruncatemacro{\Dplus}{\barH * \D * (\D+1) / 2}
+		\pgfmathtruncatemacro{\Dmax}{\D-1}
+		\pgfmathtruncatemacro{\thresh}{\D-4}
+
+		% Global vertical extents
+		\pgfmathsetmacro{\gbot}{-(\D+1)*\barH}  % trace row bottom
+		\pgfmathsetmacro{\ybot}{-\D*\barH}      % trace row top = sub-block bottom
+
+		% Padding
+		\path (-0.8,0.8) -- (\Dplus+0.8,\gbot-0.8);
+
+		% -------------------------------------------------
+		% Draw blocks
+		% -------------------------------------------------
+		\foreach \j in {0,...,\Dmax} {
+			% cj = barH*j*(2D-j+1)/2 ;  wj = (D-j)*barH
+			\pgfmathtruncatemacro{\cj}{\barH * \j * (2*\D - \j + 1) / 2}
+			\pgfmathtruncatemacro{\wj}{(\D-\j)*\barH}
+			\pgfmathsetmacro{\ybar}{-\j*\barH}         % bar top
+			\pgfmathsetmacro{\ysub}{-(\j+1)*\barH}     % bar bottom = sub-block top
+			\pgfmathsetmacro{\ymid}{(\ybar+\ysub)/2}   % bar label centre
+			\pgfmathtruncatemacro{\hsub}{\D-\j-1}      % identity size (rows = cols)
+
+			\pgfmathtruncatemacro{\isshown}{(\j<3) || (\j>\thresh) ? 1 : 0}
+
+			\ifnum\isshown=1
+				% --- 1^T bar ---
+				\fill[black!20] (\cj,\ysub) rectangle (\cj+\wj,\ybar);
+				\draw (\cj,\ysub) rectangle (\cj+\wj,\ybar);
+				% Vertical divider for j>=1 (only when there is a right part)
+				\ifnum\j>-1
+					\ifnum\wj>\barH
+						\draw (\cj+\barH,\ysub) -- (\cj+\barH,\ybar);
+					\fi
+				\fi
+				% Labels: left cell is always bold 1; right cell is the remainder
+				\node at (\cj+\barH/2,\ymid) {$1$};
+				\ifnum\wj>\barH
+					\pgfmathsetmacro{\xmid}{\cj + \barH + (\wj - \barH)/2}
+					\ifnum\j>\thresh
+						\pgfmathtruncatemacro{\jtilm}{\D-\j-1}
+						\ifnum\jtilm>1
+							\node at (\xmid,\ymid) {$\frac{1}{2}\mathbf{1}_{\jtilm}^\top$};
+						\else
+							\node at (\xmid,\ymid) {$\frac{1}{2}$};
+						\fi
+					\else
+						\pgfmathtruncatemacro{\jbar}{\j+1}
+						\node at (\xmid,\ymid) {$\frac{1}{2}\mathbf{1}_{D-\jbar}^\top$};
+					\fi
+				\fi
+
+				% --- Zero column (barH wide) + Identity square (bottom-pinned) ---
+				\ifnum\hsub>0
+					\fill[black!0]  (\cj,\ybot)        rectangle (\cj+\barH,\ysub);
+					\draw           (\cj,\ybot)        rectangle (\cj+\barH,\ysub);
+					\fill[black!15] (\cj+\barH,\ybot)  rectangle (\cj+\wj,\ysub);
+					\draw           (\cj+\barH,\ybot)  rectangle (\cj+\wj,\ysub);
+					\ifnum\hsub>0
+						\pgfmathtruncatemacro{\jid}{\j+1}
+						% identity side = hsub*barH; centre = (cj+barH+side/2, (ysub+ybot)/2)
+						\pgfmathsetmacro{\icx}{\cj + \barH + \hsub*\barH/2}
+						\pgfmathsetmacro{\icy}{(\ysub+\ybot)/2}
+						\ifnum\j=4
+							\node[font=\small] at (\icx,\icy) {$\frac{1}{2}\I_2$};
+						\else
+							\ifnum\j=5
+								\node at (\icx,\icy) {$\frac{1}{2}$};
+							\else
+								\node[font=\small] at (\icx,\icy) {$\frac{1}{2}\I_{D-\jid}$};
+							\fi
+						\fi
+					\fi
+				\fi
+
+				% --- Trace cell: barH x barH square, pinned to global bottom ---
+				\fill[black!20] (\cj,\gbot) rectangle (\cj+\barH,\ybot);
+				\draw           (\cj,\gbot) rectangle (\cj+\barH,\ybot);
+				\pgfmathsetmacro{\tcy}{(\gbot+\ybot)/2}
+				\node at (\cj+\barH/2,\tcy) {$1$};
+			\else
+				% --- Skipped block ---
+				\fill[black!5]  (\cj,0) rectangle (\cj+\wj,\gbot);
+				\draw[black!20] (\cj,0) rectangle (\cj+\wj,\gbot);
+			\fi
+		}
+
+		% -------------------------------------------------
+		% "..." in the gap (only when D > 6)
+		% -------------------------------------------------
+		\ifnum2<\thresh
+			% xgapstart = cj for j=3 = barH*3*(2D-3+1)/2 = 3*barH*(D-1)
+			\pgfmathtruncatemacro{\xgapstart}{3 * \barH * (\D-1)}
+			% xgapend = cj for j=thresh+1 = barH*(thresh+1)*(2D-thresh)/2
+			\pgfmathtruncatemacro{\xgapend}{(\thresh+1) * \barH * (2*\D - \thresh) / 2}
+			\pgfmathtruncatemacro{\xgapmid}{(\xgapstart+\xgapend)/2}
+			\pgfmathsetmacro{\ydots}{\gbot/2}
+			\node at (\xgapmid, \ydots) {$\cdots$};
+		\fi
+
+		% -------------------------------------------------
+		% Block boundaries and global horizontal lines
+		% -------------------------------------------------
+		\foreach \j in {0,...,\D} {
+			\pgfmathtruncatemacro{\cj}{\barH * \j * (2*\D - \j + 1) / 2}
+			\draw (\cj,0) -- (\cj,\gbot);
+		}
+		\draw (0,0)     -- (\Dplus,0);      % top
+		\draw (0,\ybot) -- (\Dplus,\ybot);  % top of trace row
+		\draw (0,\gbot) -- (\Dplus,\gbot);  % bottom
+	\end{tikzpicture}}}
+	\right]
+	\left[
+	\vcenter{\hbox{\begin{tikzpicture}[
+		baseline=(current bounding box.center),
+		scale=0.15,
+		font=\scriptsize
+	]
+		\def\D{7}
+		\def\barH{3}
+		\pgfmathtruncatemacro{\Dplus}{\barH * \D * (\D+1) / 2}
+		\pgfmathtruncatemacro{\Wtot}{(\D+1) * \barH}
+		\pgfmathtruncatemacro{\Wmain}{\D * \barH}
+		\pgfmathtruncatemacro{\Dmax}{\D-1}
+		\pgfmathtruncatemacro{\thresh}{\D-4}
+
+		% Padding
+		\path (-0.8,0.8) -- (\Wtot+0.8,-\Dplus-0.8);
+
+		% -------------------------------------------------
+		% Draw blocks
+		% -------------------------------------------------
+		\foreach \j in {0,...,\Dmax} {
+			\pgfmathtruncatemacro{\rj}{\barH * \j * (2*\D - \j + 1) / 2}
+			\pgfmathtruncatemacro{\hj}{(\D-\j)*\barH}
+			\pgfmathtruncatemacro{\isshown}{(\j<3) || (\j>\thresh) ? 1 : 0}
+
+			\ifnum\isshown=1
+				% --- 1 bar (left) ---
+				\fill[black!20] (\j*\barH,-\rj-\hj) rectangle (\j*\barH+\barH,-\rj);
+				\draw (\j*\barH,-\rj-\hj) rectangle (\j*\barH+\barH,-\rj);
+				\ifnum\j=0
+					\node[rotate=90] at (\j*\barH+\barH/2,-\rj-\hj/2) {$\mathbf{1}_{D}$};
+				\else
+					\node[rotate=90] at (\j*\barH+\barH/2,-\rj-\hj/2) {$\mathbf{1}_{D-\j}$};
+				\fi
+
+				% --- Right part ---
+				\ifnum\hj>\barH
+					% Top row: zero strip
+					\fill[black!0] (\j*\barH+\barH,-\rj-\barH) rectangle (\Wmain,-\rj);
+					\draw (\j*\barH+\barH,-\rj-\barH) rectangle (\Wmain,-\rj);
+
+					% Bottom: identity
+					\fill[black!15] (\j*\barH+\barH,-\rj-\hj) rectangle (\Wmain,-\rj-\barH);
+					\draw (\j*\barH+\barH,-\rj-\hj) rectangle (\Wmain,-\rj-\barH);
+
+					% Identity label
+					\pgfmathtruncatemacro{\hident}{\D-\j-1}
+					\ifnum\hident>0
+						\pgfmathtruncatemacro{\jid}{\j+1}
+						\pgfmathsetmacro{\icx}{\j*\barH+\barH + \hident*\barH/2}
+						\pgfmathsetmacro{\icy}{-\rj-\barH - \hident*\barH/2}
+						\ifnum\j=4
+							\node[font=\small] at (\icx,\icy) {$\I_2$};
+						\else
+							\ifnum\j=5
+								\node[font=\small] at (\icx,\icy) {$1$};
+							\else
+								\node[font=\small] at (\icx,\icy) {$\I_{D-\jid}$};
+							\fi
+						\fi
+					\fi
+				\else
+					% No right part when hj == barH
+				\fi
+			\else
+				% --- Skipped block ---
+				\fill[black!5] (0,-\rj) rectangle (\Wmain,-\rj-\hj);
+				\draw[black!20] (0,-\rj) rectangle (\Wmain,-\rj-\hj);
+			\fi
+		}
+
+		% -------------------------------------------------
+		\foreach \j in {0,...,\Dmax} {
+			\pgfmathtruncatemacro{\isshown}{(\j<3) || (\j>\thresh) ? 1 : 0}
+			\ifnum\isshown=1
+				\pgfmathtruncatemacro{\rj}{\barH * \j * (2*\D - \j + 1) / 2}
+				\fill[black!20] (\Wmain,-\rj-\barH) rectangle (\Wmain+\barH,-\rj);
+				\draw (\Wmain,-\rj-\barH) rectangle (\Wmain+\barH,-\rj);
+				\node at (\Wmain+\barH/2, -\rj-\barH/2) {$1$};
+			\fi
+		}
+
+% "..." in the gap
+		% -------------------------------------------------
+		\ifnum2<\thresh
+			\pgfmathtruncatemacro{\ygapstart}{3 * \barH * (\D-1)}
+			\pgfmathtruncatemacro{\ygapend}{(\thresh+1) * \barH * (2*\D - \thresh) / 2}
+			\pgfmathtruncatemacro{\ygapmid}{(\ygapstart+\ygapend)/2}
+			\pgfmathsetmacro{\xdots}{\Wtot/2}
+			\node at (\xdots,-\ygapmid) {$\cdots$};
+		\fi
+
+		% -------------------------------------------------
+		% Block boundaries and global edges
+		% -------------------------------------------------
+		\foreach \j in {0,...,\D} {
+			\pgfmathtruncatemacro{\rj}{\barH * \j * (2*\D - \j + 1) / 2}
+			\draw (0,-\rj) -- (\Wtot,-\rj);
+		}
+		\draw (0,0) -- (0,-\Dplus);
+		\draw (\Wtot,0) -- (\Wtot,-\Dplus);
+	\end{tikzpicture}}}
+	\right]
+	$} = \\[-20pt]
+	\begin{bmatrix}
+		\frac{D+1}{2} & \frac{1}{2} & \cdots & \frac{1}{2} & 1 \\
+		\frac{1}{2} & \frac{D+1}{2} & \cdots & \frac{1}{2} & 1 \\
+		\vdots & \vdots & \ddots & \vdots & \vdots \\
+		\frac{1}{2} & \frac{1}{2} & \cdots & \frac{D+1}{2} & 1 \\
+		1 & 1 & \cdots & 1 & D
+	\end{bmatrix} = \begin{bmatrix} \T & \mathbf{1}_D \\ \mathbf{1}_D^\top & D \end{bmatrix}
+\end{array}
+\end{equation}
+where $\T \coloneqq \frac{D}{2}\I_D + \frac{1}{2}\mathbf{1}_D\mathbf{1}_D^\top$. Because $\T$ is a rank-one perturbation of a scaled identity, its inverse follows from the Sherman--Morrison formula:
+\begin{equation}
+	\T^{-1} = \frac{2}{D}\I_D - \frac{1}{D^2}\mathbf{1}_D\mathbf{1}_D^\top.
+\end{equation}
+
+Writing
+\begin{equation}
+	\M_\mathcal{W}|\P=\begin{bmatrix}\N_{11} & \N_{12}\\[2pt] \N_{21} & \N_{22}\end{bmatrix},
+\end{equation}
+with $\N_{11}=-\A\P^{-1}\A^\top$, $\N_{12}=-\A\P^{-1}\B_\mathcal{W}^\top$, $\N_{21}=\N_{12}^\top=-\B_\mathcal{W}\P^{-1}\A^\top$ and $\N_{22}=-\B_\mathcal{W}\P^{-1}\B_\mathcal{W}^\top$; the Schur complement with respect to $\N_{11}$ yields
+\begin{align}
+	\mathbf{S}_2 &\coloneqq (\M_\mathcal{W}|\P)|\N_{11} = \N_{22}-\N_{21}\N_{11}^{-1}\N_{12}
+	= \\ 
+	&= -\B_\mathcal{W}\P^{-1}\B_\mathcal{W}^\top + \B_\mathcal{W}\P^{-1}\A^\top(\A\P^{-1}\A^\top)^{-1}\A\P^{-1}\B_\mathcal{W}^\top , \nonumber
+\end{align}
+and
+\begin{equation}\label{eq:MwP_inv_block}
+	(\M_\mathcal{W}|\P)^{-1}
+	=
+	\begin{bmatrix}
+		\N_{11}^{-1}+\N_{11}^{-1}\N_{12}\mathbf{S}_2^{-1}\N_{21}\N_{11}^{-1} & -\N_{11}^{-1}\N_{12}\mathbf{S}_2^{-1}\\[4pt]
+		-\mathbf{S}_2^{-1}\N_{21}\N_{11}^{-1} & \mathbf{S}_2^{-1}
+	\end{bmatrix}.
+\end{equation}
+To invert the full block matrix $\N_{11}$ we use the block-inversion (Schur-complement) identity
+\begin{equation}
+	\N_{11}^{-1}=-\begin{bmatrix}\T&\mathbf{1}_D\\ \mathbf{1}_D^\top&D\end{bmatrix}^{-1}
+	=
+	-\begin{bmatrix}
+		\T^{-1}+\frac{1}{s}\T^{-1}\mathbf{1}_D\mathbf{1}_D^\top\T^{-1} & -\frac{1}{s}\T^{-1}\mathbf{1}_D\\[4pt]
+		-\frac{1}{s}\mathbf{1}_D^\top\T^{-1} & \frac{1}{s}
+	\end{bmatrix},
+\end{equation}
+with scalar Schur complement
+\begin{equation}
+	s = D-\mathbf{1}_D^\top\T^{-1}\mathbf{1}_D
+	= D-\Bigl(\frac{2}{D}\cdot D-\frac{1}{D^2}\cdot D^2\Bigr)
+	= D-1.
+\end{equation}
+Since $\T^{-1}\mathbf{1}_D=\tfrac{1}{D}\mathbf{1}_D$, this simplifies to
+\begin{equation}
+	\N_{11}^{-1}
+	=
+	-\begin{bmatrix}
+		\displaystyle\frac{2}{D}\I_D-\frac{D-2}{D^2(D-1)}\mathbf{1}_D\mathbf{1}_D^\top &
+		\displaystyle-\frac{1}{D(D-1)}\mathbf{1}_D\\[10pt]
+		\displaystyle-\frac{1}{D(D-1)}\mathbf{1}_D^\top &
+		\displaystyle\frac{1}{D-1}
+	\end{bmatrix}.
+\end{equation}
+\label{eq:N11_inv}
+Denote by $\A=\begin{bmatrix}
+	\A_1 \\
+	\a_2^\top
+\end{bmatrix}$, where $\A_1\in\R^{D\times D_+}$ is the sub-matrix formed by the first $D$ rows and $\a_2\in\R^{D_+}$ is the last row of $\A$. From the block patterns of $\A$ and $\B$, the product 
+\begin{equation}
+\begin{lgathered}
+	\C\coloneqq \B\A^\top = \\[-20pt]
+	\left[
+	\vcenter{\hbox{\begin{tikzpicture}[
+		baseline=(current bounding box.center),
+		scale=0.30,
+		font=\small
+	]
+		\def\D{6}
+		\pgfmathtruncatemacro{\Dminus}{\D*(\D-1)/2}
+		\pgfmathtruncatemacro{\Dplus}{\D*(\D+1)/2}
+
+		% -------------------------------------------------
+		% Invisible padding: expand bounding box by 0.8 units
+		% on each side so brackets don't touch the blocks.
+		% Increase 0.8 for more margin, decrease for less.
+		% -------------------------------------------------
+		\path (-0.8,0) -- (\Dplus+0.8,-\Dminus);
+
+		% Diagonal zero columns
+		\foreach \k in {1,...,\D} {
+			\pgfmathtruncatemacro{\c}{(\k-1)*(\D+1) - (\k-1)*\k/2}
+			\fill[black!0] (\c,0) rectangle (\c+1,-\Dminus);
+			\draw (\c,0) rectangle (\c+1,-\Dminus);
+		}
+
+		% First few identity blocks
+		\def\numblocks{3}
+		\foreach \k in {1,...,\numblocks} {
+			\pgfmathtruncatemacro{\size}{\D-\k}
+			\pgfmathtruncatemacro{\r}{(\k-1)*\D - (\k-1)*\k/2}
+			\pgfmathtruncatemacro{\c}{\r+\k}
+
+			\fill[black!15] (\c,-\r) rectangle (\c+\size,-\r-\size);
+			\draw (\c,-\r) rectangle (\c+\size,-\r-\size);
+			\node at (\c+\size/2,-\r-\size/2) {$\I_{D-\k}$};
+		}
+
+		% Dots
+		\pgfmathtruncatemacro{\lastr}{(\numblocks)*\D - (\numblocks)*(\numblocks+1)/2}
+		\pgfmathtruncatemacro{\lastc}{\lastr+\numblocks}
+		\ifnum\lastr<\Dminus
+			\node at ({(\lastc+\Dplus-1)/2-0.5},{(-\lastr-\Dminus)/2+1}) {$\ddots$};
+		\fi
+
+		% Last block
+		\def\k{5}
+		\pgfmathtruncatemacro{\size}{\D-\k}
+		\pgfmathtruncatemacro{\r}{(\k-1)*\D - (\k-1)*\k/2}
+		\pgfmathtruncatemacro{\c}{\r+\k}
+
+		\fill[black!15] (\c,-\r) rectangle (\c+\size,-\r-\size);
+		\draw (\c,-\r) rectangle (\c+\size,-\r-\size);
+	\end{tikzpicture}}}
+	\right]
+	\left[
+	\vcenter{\hbox{\begin{tikzpicture}[
+		baseline=(current bounding box.center),
+		scale=0.15,
+		font=\scriptsize
+	]
+		\def\D{7}
+		\def\barH{3}
+		\pgfmathtruncatemacro{\Dplus}{\barH * \D * (\D+1) / 2}
+		\pgfmathtruncatemacro{\Wtot}{(\D+1) * \barH}
+		\pgfmathtruncatemacro{\Wmain}{\D * \barH}
+		\pgfmathtruncatemacro{\Dmax}{\D-1}
+		\pgfmathtruncatemacro{\thresh}{\D-4}
+
+		% Padding
+		\path (-0.8,0.8) -- (\Wtot+0.8,-\Dplus-0.8);
+
+		% -------------------------------------------------
+		% Draw blocks
+		% -------------------------------------------------
+		\foreach \j in {0,...,\Dmax} {
+			\pgfmathtruncatemacro{\rj}{\barH * \j * (2*\D - \j + 1) / 2}
+			\pgfmathtruncatemacro{\hj}{(\D-\j)*\barH}
+			\pgfmathtruncatemacro{\isshown}{(\j<3) || (\j>\thresh) ? 1 : 0}
+
+			\ifnum\isshown=1
+				% --- 1 bar (left) ---
+				\fill[black!20] (\j*\barH,-\rj-\hj) rectangle (\j*\barH+\barH,-\rj);
+				\draw (\j*\barH,-\rj-\hj) rectangle (\j*\barH+\barH,-\rj);
+				\ifnum\j=0
+					\node[rotate=90] at (\j*\barH+\barH/2,-\rj-\hj/2) {$\mathbf{1}_{D}$};
+				\else
+					\ifnum\j<3
+						\node[rotate=90] at (\j*\barH+\barH/2,-\rj-\hj/2) {$\mathbf{1}_{D-\j}$};
+					\else
+						\pgfmathtruncatemacro{\jil}{\D-\j};
+						\ifnum\jil>1
+							\node[rotate=90] at (\j*\barH+\barH/2,-\rj-\hj/2) {$\mathbf{1}_{\jil}$};
+						\else
+							\node at (\j*\barH+\barH/2,-\rj-\hj/2) {$1$};
+						\fi
+					\fi
+				\fi
+
+				% --- Right part ---
+				\ifnum\hj>\barH
+					% Top row: zero strip
+					\fill[black!0] (\j*\barH+\barH,-\rj-\barH) rectangle (\Wmain,-\rj);
+					\draw (\j*\barH+\barH,-\rj-\barH) rectangle (\Wmain,-\rj);
+
+					% Bottom: identity
+					\fill[black!15] (\j*\barH+\barH,-\rj-\hj) rectangle (\Wmain,-\rj-\barH);
+					\draw (\j*\barH+\barH,-\rj-\hj) rectangle (\Wmain,-\rj-\barH);
+
+					% Identity label
+					\pgfmathtruncatemacro{\hident}{\D-\j-1}
+					\ifnum\hident>0
+						\pgfmathtruncatemacro{\jid}{\j+1}
+						\pgfmathsetmacro{\icx}{\j*\barH+\barH + \hident*\barH/2}
+						\pgfmathsetmacro{\icy}{-\rj-\barH - \hident*\barH/2}
+						\ifnum\j=4
+							\node[font=\small] at (\icx,\icy) {$\I_2$};
+						\else
+							\ifnum\j=5
+								\node at (\icx,\icy) {$1$};
+							\else
+								\node[font=\small] at (\icx,\icy) {$\I_{D-\jid}$};
+							\fi
+						\fi
+					\fi
+				\else
+					% No right part when hj == barH
+				\fi
+			\else
+				% --- Skipped block ---
+				\fill[black!5] (0,-\rj) rectangle (\Wmain,-\rj-\hj);
+				\draw[black!20] (0,-\rj) rectangle (\Wmain,-\rj-\hj);
+			\fi
+		}
+
+		% -------------------------------------------------
+		\foreach \j in {0,...,\Dmax} {
+			\pgfmathtruncatemacro{\isshown}{(\j<3) || (\j>\thresh) ? 1 : 0}
+			\ifnum\isshown=1
+				\pgfmathtruncatemacro{\rj}{\barH * \j * (2*\D - \j + 1) / 2}
+				\fill[black!20] (\Wmain,-\rj-\barH) rectangle (\Wmain+\barH,-\rj);
+				\draw (\Wmain,-\rj-\barH) rectangle (\Wmain+\barH,-\rj);
+				\node at (\Wmain+\barH/2, -\rj-\barH/2) {$1$};
+			\fi
+		}
+
+% "..." in the gap
+		% -------------------------------------------------
+		\ifnum2<\thresh
+			\pgfmathtruncatemacro{\ygapstart}{3 * \barH * (\D-1)}
+			\pgfmathtruncatemacro{\ygapend}{(\thresh+1) * \barH * (2*\D - \thresh) / 2}
+			\pgfmathtruncatemacro{\ygapmid}{(\ygapstart+\ygapend)/2}
+			\pgfmathsetmacro{\xdots}{\Wtot/2}
+			\node at (\xdots,-\ygapmid) {$\cdots$};
+		\fi
+
+		% -------------------------------------------------
+		% Block boundaries and global edges
+		% -------------------------------------------------
+		\foreach \j in {0,...,\D} {
+			\pgfmathtruncatemacro{\rj}{\barH * \j * (2*\D - \j + 1) / 2}
+			\draw (0,-\rj) -- (\Wtot,-\rj);
+		}
+		\draw (0,0) -- (0,-\Dplus);
+		\draw (\Wtot,0) -- (\Wtot,-\Dplus);
+	\end{tikzpicture}}}
+	\right]
+	= 
+	\left[
+	\vcenter{\hbox{\begin{tikzpicture}[
+		baseline=(current bounding box.center),
+		scale=0.30,
+		font=\scriptsize
+	]
+		\def\D{8}
+		\pgfmathtruncatemacro{\Dminus}{\D*(\D-1)/2}
+		\pgfmathtruncatemacro{\Dmax}{\D-1}
+
+		% Invisible padding
+		\path (-0.8,0.8) -- (\D+1+0.8,-\Dminus-0.8);
+
+		% -------------------------------------------------
+		% Start blocks: i = 1, 2, 3
+		% -------------------------------------------------
+		% Block 1
+		\pgfmathtruncatemacro{\h}{\D-1}
+		\fill[black!20] (0,0) rectangle (1,-\h);
+		\draw (0,0) rectangle (1,-\h);
+		\node[rotate=90] at (0.5,-\h/2) {$\mathbf{1}_{D-1}$};
+		\fill[black!15] (1,0) rectangle (\D,-\h);
+		\draw (1,0) rectangle (\D,-\h);
+		\node at (1+\h/2,-\h/2) {$\I_{D-1}$};
+
+		% Block 2
+		\pgfmathtruncatemacro{\r}{\D-1}
+		\pgfmathtruncatemacro{\h}{\D-2}
+		\fill[black!5] (0,-\r) rectangle (1,-\r-\h);
+		\draw (0,-\r) rectangle (1,-\r-\h);
+		\fill[black!20] (1,-\r) rectangle (2,-\r-\h);
+		\draw (1,-\r) rectangle (2,-\r-\h);
+		\node[rotate=90] at (1.5,-\r-\h/2) {$\mathbf{1}_{D-2}$};
+		\fill[black!15] (2,-\r) rectangle (\D,-\r-\h);
+		\draw (2,-\r) rectangle (\D,-\r-\h);
+		\node at (2+\h/2,-\r-\h/2) {$\I_{D-2}$};
+
+		% Block 3
+		\pgfmathtruncatemacro{\r}{2*\D-3}
+		\pgfmathtruncatemacro{\h}{\D-3}
+		\fill[black!5] (0,-\r) rectangle (2,-\r-\h);
+		\draw (0,-\r) rectangle (2,-\r-\h);
+		\fill[black!20] (2,-\r) rectangle (3,-\r-\h);
+		\draw (2,-\r) rectangle (3,-\r-\h);
+		\node[rotate=90] at (2.5,-\r-\h/2) {$\mathbf{1}_{D-3}$};
+		\fill[black!15] (3,-\r) rectangle (\D,-\r-\h);
+		\draw (3,-\r) rectangle (\D,-\r-\h);
+		\node at (3+\h/2,-\r-\h/2) {$\I_{D-3}$};
+
+		% -------------------------------------------------
+		% Gap with ... (only when D > 6)
+		% -------------------------------------------------
+		\ifnum\D>6
+			\pgfmathtruncatemacro{\gapstart}{3*\D-6}
+			\pgfmathtruncatemacro{\gapend}{\Dminus-3}
+			\pgfmathtruncatemacro{\gapheight}{\gapend-\gapstart}
+			\fill[black!5] (0,-\gapstart) rectangle (\D,-\gapstart-\gapheight);
+			\draw[black!20] (0,-\gapstart) rectangle (\D,-\gapstart-\gapheight);
+			\node at (\D/2,-\gapstart-\gapheight/2) {$\vdots$};
+		\fi
+
+		% -------------------------------------------------
+		% End blocks: i = D-2, D-1 (only when D > 6)
+		% -------------------------------------------------
+		\ifnum\D>6
+			% Block D-2
+			\pgfmathtruncatemacro{\r}{\Dminus-3}
+			\pgfmathtruncatemacro{\h}{2}
+			\pgfmathtruncatemacro{\zw}{\D-3}
+			\pgfmathtruncatemacro{\iw}{2}
+			\fill[black!5] (0,-\r) rectangle (\zw,-\r-\h);
+			\draw (0,-\r) rectangle (\zw,-\r-\h);
+			\fill[black!20] (\zw,-\r) rectangle (\zw+1,-\r-\h);
+			\draw (\zw,-\r) rectangle (\zw+1,-\r-\h);
+			\node[rotate=90] at (\zw+0.5,-\r-\h/2) {$\mathbf{1}_{2}$};
+			\fill[black!15] (\zw+1,-\r) rectangle (\D,-\r-\h);
+			\draw (\zw+1,-\r) rectangle (\D,-\r-\h);
+			\node at (\zw+1+\iw/2,-\r-\h/2) {$\I_{2}$};
+
+			% Block D-1
+			\pgfmathtruncatemacro{\r}{\Dminus-1}
+			\pgfmathtruncatemacro{\h}{1}
+			\pgfmathtruncatemacro{\zw}{\D-2}
+			\fill[black!5] (0,-\r) rectangle (\zw,-\r-\h);
+			\draw (0,-\r) rectangle (\zw,-\r-\h);
+			\fill[black!20] (\zw,-\r) rectangle (\zw+1,-\r-\h);
+			\draw (\zw,-\r) rectangle (\zw+1,-\r-\h);
+			\node at (\zw+0.5,-\r-\h/2) {$1$};
+			\fill[black!15] (\zw+1,-\r) rectangle (\D,-\r-\h);
+			\draw (\zw+1,-\r) rectangle (\D,-\r-\h);
+			\node at (\zw+1.5,-\r-\h/2) {$1$};
+		\fi
+
+		% Blank zero column
+		\fill[black!0] (\D,0) rectangle (\D+1,-\Dminus);
+		\draw (\D,0) rectangle (\D+1,-\Dminus);
+
+	\end{tikzpicture}}}
+	\right] = \\
+	\begin{bmatrix}
+		\C_1 & \mathbf{0}_{D_-}
+	\end{bmatrix},
+\end{lgathered}
+\end{equation}
+Transposing gives
+\begin{equation}
+	\C^\top\coloneqq
+	\left[
+	\vcenter{\hbox{\begin{tikzpicture}[
+		baseline=(current bounding box.center),
+		scale=0.30,
+		font=\scriptsize
+	]
+		\def\D{8}
+		\pgfmathtruncatemacro{\Dminus}{\D*(\D-1)/2}
+
+		% Invisible padding
+		\path (-0.8,0.8) -- (\Dminus+0.8,-\D-1-0.8);
+
+		% -------------------------------------------------
+		% Start blocks: i = 1, 2, 3
+		% -------------------------------------------------
+		% Block 1
+		\pgfmathtruncatemacro{\w}{\D-1}
+		\fill[black!20] (0,0) rectangle (\w,-1);
+		\draw (0,0) rectangle (\w,-1);
+		\node at (\w/2,-0.5) {$\mathbf{1}_{D-1}^\top$};
+		\fill[black!15] (0,-1) rectangle (\w,-\D);
+		\draw (0,-1) rectangle (\w,-\D);
+		\node at (\w/2,{-(1+\D)/2}) {$\I_{D-1}$};
+
+		% Block 2
+		\pgfmathtruncatemacro{\c}{\D-1}
+		\pgfmathtruncatemacro{\w}{\D-2}
+		\fill[black!5] (\c,0) rectangle (\c+\w,-1);
+		\draw (\c,0) rectangle (\c+\w,-1);
+		\fill[black!20] (\c,-1) rectangle (\c+\w,-2);
+		\draw (\c,-1) rectangle (\c+\w,-2);
+		\node at (\c+\w/2,-1.5) {$\mathbf{1}_{D-2}^\top$};
+		\fill[black!15] (\c,-2) rectangle (\c+\w,-\D);
+		\draw (\c,-2) rectangle (\c+\w,-\D);
+		\node at (\c+\w/2,{-(2+\D)/2}) {$\I_{D-2}$};
+
+		% Block 3
+		\pgfmathtruncatemacro{\c}{2*\D-3}
+		\pgfmathtruncatemacro{\w}{\D-3}
+		\fill[black!5] (\c,0) rectangle (\c+\w,-2);
+		\draw (\c,0) rectangle (\c+\w,-2);
+		\fill[black!20] (\c,-2) rectangle (\c+\w,-3);
+		\draw (\c,-2) rectangle (\c+\w,-3);
+		\node at (\c+\w/2,-2.5) {$\mathbf{1}_{D-3}^\top$};
+		\fill[black!15] (\c,-3) rectangle (\c+\w,-\D);
+		\draw (\c,-3) rectangle (\c+\w,-\D);
+		\node at (\c+\w/2,{-(3+\D)/2}) {$\I_{D-3}$};
+
+		% -------------------------------------------------
+		% Gap with ... (only when D > 6)
+		% -------------------------------------------------
+		\ifnum\D>6
+			\pgfmathtruncatemacro{\gapstart}{3*\D-6}
+			\pgfmathtruncatemacro{\gapend}{\Dminus-3}
+			\pgfmathtruncatemacro{\gapwidth}{\gapend-\gapstart}
+			\fill[black!5] (\gapstart,0) rectangle (\gapend,-\D);
+			\draw[black!20] (\gapstart,0) rectangle (\gapend,-\D);
+			\node at (\gapstart+\gapwidth/2,-\D/2) {$\cdots$};
+		\fi
+
+		% -------------------------------------------------
+		% End blocks: i = D-2, D-1 (only when D > 6)
+		% -------------------------------------------------
+		\ifnum\D>6
+			% Block D-2
+			\pgfmathtruncatemacro{\c}{\Dminus-3}
+			\pgfmathtruncatemacro{\w}{2}
+			\pgfmathtruncatemacro{\zh}{\D-3}
+			\fill[black!5] (\c,0) rectangle (\c+\w,-\zh);
+			\draw (\c,0) rectangle (\c+\w,-\zh);
+			\fill[black!20] (\c,-\zh) rectangle (\c+\w,-\zh-1);
+			\draw (\c,-\zh) rectangle (\c+\w,-\zh-1);
+			\node at (\c+\w/2,-\zh-0.5) {$\mathbf{1}_{2}^\top$};
+			\fill[black!15] (\c,-\zh-1) rectangle (\c+\w,-\D);
+			\draw (\c,-\zh-1) rectangle (\c+\w,-\D);
+			\node at (\c+\w/2,{-(\zh+1+\D)/2}) {$\I_{2}$};
+
+			% Block D-1
+			\pgfmathtruncatemacro{\c}{\Dminus-1}
+			\pgfmathtruncatemacro{\w}{1}
+			\pgfmathtruncatemacro{\zh}{\D-2}
+			\fill[black!5] (\c,0) rectangle (\c+\w,-\zh);
+			\draw (\c,0) rectangle (\c+\w,-\zh);
+			\fill[black!20] (\c,-\zh) rectangle (\c+\w,-\zh-1);
+			\draw (\c,-\zh) rectangle (\c+\w,-\zh-1);
+			\node at (\c+\w/2,-\zh-0.5) {$1$};
+			\fill[black!15] (\c,-\zh-1) rectangle (\c+\w,-\D);
+			\draw (\c,-\zh-1) rectangle (\c+\w,-\D);
+			\node at (\c+\w/2,{-(\zh+1+\D)/2}) {$1$};
+		\fi
+
+		% Blank zero row
+		\fill[black!0] (0,-\D) rectangle (\Dminus,-\D-1);
+		\draw (0,-\D) rectangle (\Dminus,-\D-1);
+
+	\end{tikzpicture}}}
+	\right]
+	=
+	\begin{bmatrix}
+		\C_1^\top \\
+		\mathbf{0}_{D_-}^\top
+	\end{bmatrix}.
+\end{equation}
+where $\C_1^\top\in\{0,1\}^{D\times D_-}$ is the incidence matrix of the complete graph $\mathcal{G}^\ast$. Because $\B$ selects only off-diagonal positions, the product $\B\P^{-1}\A^\top = \begin{bmatrix}
+		\tfrac{1}{2}\C_1 & \mathbf{0}_{D_-}
+	\end{bmatrix}$, and therefore,
+\begin{equation}
+\label{eq:BWP_A1}
+\B_\mathcal{W}\P^{-1}\A^\top = \begin{bmatrix}
+		\tfrac{1}{2}\C_\mathcal{W} & \mathbf{0}_{D_-}
+	\end{bmatrix}
+\end{equation}
+where $\C_\mathcal{W}$ contains the rows of $\C_1$ indexed by $\mathcal{W}$. 
+
+The rows of $\B_\mathcal{W}$ are mutually exclusive indicator vectors that select off-diagonal entries of $\L$, i.e. each row contains a single entry equal to 1 and all other entries equal to 0, with distinct rows having their non-zero entries in different columns. Therefore, 
+\begin{equation}
+	\B_\mathcal{W}\P^{-1}\B_\mathcal{W}^\top = \frac{1}{2}\B_\mathcal{W}\B_\mathcal{W}^\top = \frac{1}{2}\I_{|\mathcal{W}|}.
+\end{equation}
+
+Using \eqref{eq:BWP_A1} we can write the Schur complement $\mathbf{S}_2$ explicitly:
+\begin{equation}
+	\begin{split}
+	\mathbf{S}_2 &= -\B_\mathcal{W}\P^{-1}\B_\mathcal{W}^\top + \B_\mathcal{W}\P^{-1}\A^\top(\A\P^{-1}\A^\top)^{-1}\A\P^{-1}\B_\mathcal{W}^\top = \\
+	&= -\tfrac12\I_{|\mathcal{W}|} + \B_\mathcal{W}\P^{-1}\A^\top\N_{11}^{-1}\A\P^{-1}\B_\mathcal{W}^\top \\
+	&= -\tfrac12\I_{|\mathcal{W}|} - \begin{bmatrix} \tfrac12\C_\mathcal{W} & \mathbf{0} \end{bmatrix}
+	\begin{bmatrix}
+		\displaystyle\frac{2}{D}\I_D-\frac{D-2}{D^2(D-1)}\mathbf{1}_D\mathbf{1}_D^\top &
+		\displaystyle-\frac{1}{D(D-1)}\mathbf{1}_D\\[10pt]
+		\displaystyle-\frac{1}{D(D-1)}\mathbf{1}_D^\top &
+		\displaystyle\frac{1}{D-1}
+	\end{bmatrix}
+	\begin{bmatrix} \tfrac12\C_\mathcal{W}^\top \\ \mathbf{0}^\top \end{bmatrix} \\
+	&= -\tfrac12\I_{|\mathcal{W}|} - \frac{1}{4}\C_\mathcal{W}\Q_{11}\C_\mathcal{W}^\top ,
+	\end{split}
+\end{equation}
+where $\Q_{11}\coloneqq\frac{2}{D}\I_D - \frac{D-2}{D^2(D-1)}\mathbf{1}_D\mathbf{1}_D^\top$. The zero column in \eqref{eq:BWP_A1} annihilates the last row and column of $\N_{11}^{-1}$. And because the last column of $\N_{12}$ (and last row of $\N_{21}$) is zero, the product $\N_{11}^{-1}\N_{12}$ collapses to a single block column. Using $\mathbf{1}_D^\top\C_\mathcal{W}^\top=2\mathbf{1}_{|\mathcal{W}|}^\top$,
+\begin{equation}
+	\label{eq:U_def}
+	\mathbf{S}_3\coloneqq\N_{11}^{-1}\N_{12}
+	=
+	\begin{bmatrix}
+		\displaystyle\frac{1}{D}\C_\mathcal{W}^\top-\frac{D-2}{D^2(D-1)}\mathbf{1}_D\mathbf{1}_{|\mathcal{W}|}^\top\\[8pt]
+		\displaystyle-\frac{1}{D(D-1)}\mathbf{1}_{|\mathcal{W}|}^\top
+	\end{bmatrix}.
+\end{equation}
+Hence, $(\M_\mathcal{W}|\P)^{-1}$ can be written compactly as
+\begin{equation}
+	\label{eq:MWP_inv_compact}
+	(\M_\mathcal{W}|\P)^{-1} =
+	\begin{bmatrix}
+		\N_{11}^{-1}+\mathbf{S}_3\mathbf{S}_2^{-1}\mathbf{S}_3^\top & -\mathbf{S}_3\mathbf{S}_2^{-1}\\[4pt]
+		-\mathbf{S}_2^{-1}\mathbf{S}_3^\top & \mathbf{S}_2^{-1}
+	\end{bmatrix}.
+\end{equation}
+
+In an active-set method the working set changes by adding or removing a single edge. When an edge is added, the new working set is $\mathcal{W}_{k+1}=\mathcal{W}_k\cup\{e_{k+1}\}$ and the matrix $\C_{\mathcal{W}_{k+1}}$ is obtained from $\C_{\mathcal{W}_k}$ by appending the row vector $\c_{k+1}^\top\in\{0,1\}^D$ associated with the new edge $e_{k+1}$,
+\begin{equation}\label{eq:C_W_add}
+\C_{\mathcal{W}_{k+1}} = \begin{bmatrix} \C_{\mathcal{W}_k} \\ \c_{k+1}^\top \end{bmatrix},
+\end{equation}
+where $\c_{k+1}$ contains exactly two entries equal to $1$ (vertices at the endpoints of $e_{k+1}$) and zeros elsewhere. Conversely, when an edge at position $j$ is removed, $\mathcal{W}_{k+1}=\mathcal{W}_k\setminus\{e_j\}$ and $\C_{\mathcal{W}_{k+1}}$ is obtained by deleting the $j$-th row of $\C_{\mathcal{W}_k}$. 
+
+\subsection{Adding an edge}
+\label{subsec:adding_edge}
+
+Substituting the bordered form $\C_{\mathcal{W}_{k+1}}$ from~\eqref{eq:C_W_add} into the explicit expression for $\mathbf{S}_2$ and expanding the quadratic form gives
+\begin{equation}
+\mathbf{S}_2^{(k+1)} = -\tfrac12\I_{|\mathcal{W}_k|+1} - \frac14\begin{bmatrix} \C_{\mathcal{W}_k}\Q_{11}\C_{\mathcal{W}_k}^\top & \C_{\mathcal{W}_k}\Q_{11}\c_{k+1} \\ \c_{k+1}^\top\Q_{11}\C_{\mathcal{W}_k}^\top & \c_{k+1}^\top\Q_{11}\c_{k+1} \end{bmatrix},
+\end{equation}
+Because $\mathbf{S}_2^{(k)} = -\tfrac12\I_{|\mathcal{W}_k|} - \frac14\C_{\mathcal{W}_k}\Q_{11}\C_{\mathcal{W}_k}^\top$, this reduces to the bordered matrix
+\begin{equation}\label{eq:S2_update}
+\mathbf{S}_2^{(k+1)}=
+\begin{bmatrix}
+\mathbf{S}_2^{(k)} & \u_{k+1}\\[2pt]
+\u_{k+1}^\top & \gamma_{k+1}
+\end{bmatrix},
+\end{equation}
+with
+\begin{align}
+	\label{eq:u_update_vec}
+	\u_{k+1} &= -\frac{1}{2D}\C_{\mathcal{W}_k}\c_{k+1} + \frac{D-2}{D^2(D-1)}\mathbf{1}_{|\mathcal{W}_k|},\\
+	\label{eq:gamma_update}
+	\gamma_{k+1} &= -\frac12 - \frac{1}{2D}\c_{k+1}^\top\c_{k+1} + \frac{D-2}{D^2(D-1)} = \frac{-D^3-D^2+4D-4}{2D^2(D-1)}.
+\end{align}
+Since $\c_{k+1}^\top\c_{k+1}=2$ and $\c_i^\top\c_{k+1}$ with $i\neq k+1$ equals $1$ when $e_i$ shares a vertex with $e_{k+1}$ and $0$ otherwise, the $i^\text{th}$ entry of $\u_{k+1}$ becomes
+\begin{equation}
+	\label{eq:u_entrywise_derived}
+	[\u_{k+1}]_i=
+	\begin{cases}
+		\displaystyle\frac{-D^2+3D-4}{2D^2(D-1)}, & e_i\sim e_{k+1},\\[8pt]
+		\displaystyle\frac{D-2}{D^2(D-1)}, & e_i\not\sim e_{k+1},
+	\end{cases}
+	\qquad i=1,\dots,|\mathcal{W}_k|.
+\end{equation}
+For the very first edge there is no previous working set, so $\u_1$ is empty and $\mathbf{S}_2^{(1)}=[\gamma_1]$ with $\gamma_1=\frac{-D^3-D^2+4D-4}{2D^2(D-1)}$. Using the block-inversion formula, the inverse of the bordered matrix is obtained from $(\mathbf{S}_2^{(k)})^{-1}$ as
+\begin{equation}\label{eq:S2_inv_update}
+(\mathbf{S}_2^{(k+1)})^{-1} = \begin{bmatrix} (\mathbf{S}_2^{(k)})^{-1} + \frac{1}{\sigma_{k+1}}\v_{k+1}\v_{k+1}^\top & -\frac{1}{\sigma_{k+1}}\v_{k+1} \\[2pt] -\frac{1}{\sigma_{k+1}}\v_{k+1}^\top & \frac{1}{\sigma_{k+1}} \end{bmatrix},
+\end{equation}
+where $\v_{k+1}\coloneqq(\mathbf{S}_2^{(k)})^{-1}\u_{k+1}$ and $\sigma_{k+1}\coloneqq\gamma_{k+1}-\u_{k+1}^\top\v_{k+1}=\gamma_{k+1}-\u_{k+1}^\top(\mathbf{S}_2^{(k)})^{-1}\u_{k+1}$ is the scalar Schur complement. Consequently $(\mathbf{S}_2^{(k)})^{-1}$ can be maintained with rank-1 updates (adding) or downdates (removing) at cost $\mathcal{O}(|\mathcal{W}|^2)$ per iteration, avoiding the $\mathcal{O}(|\mathcal{W}|^3)$ expense of recomputing the inverse from scratch. Similarly, the matrix $\mathbf{S}_3$ is updated by appending the column
+\begin{equation}
+	\label{eq:s_e}
+	\s_{k+1}
+	=
+	\begin{bmatrix}
+		\displaystyle\frac{1}{D}\c_{k+1}-\frac{D-2}{D^2(D-1)}\mathbf{1}_D\\[10pt]
+		\displaystyle-\frac{1}{D(D-1)}
+	\end{bmatrix},
+\end{equation}
+so that
+\begin{equation}
+	\label{eq:S3_update}
+	\mathbf{S}_3^{(k+1)}
+	=
+	\begin{bmatrix}
+		\mathbf{S}_3^{(k)} & \s_{k+1}
+	\end{bmatrix}.
+\end{equation}
+This avoids recomputing the full Schur-complement inverse from scratch and keeps the cost at $\mathcal{O}((D+|\mathcal{W}|)^2)$ per working-set addition.
+
+Using the bordered inverse of $\mathbf{S}_2$ and the column update of $\mathbf{S}_3$, the blocks of \eqref{eq:MWP_inv_compact} update as follows. Let
+\begin{equation}
+	\label{eq:K_blocks}
+	(\M_{\mathcal{W}_k}|\P)^{-1}
+	=
+	-\begin{bmatrix}
+		\mathbf{K}_{11}^{(k)} & \mathbf{K}_{12}^{(k)} \\[4pt]
+		\mathbf{K}_{21}^{(k)} & \mathbf{K}_{22}^{(k)}
+	\end{bmatrix},
+\end{equation}
+where, from \eqref{eq:MWP_inv_compact},
+\begin{equation}
+	\label{eq:K_blocks_def}
+	\mathbf{K}_{11}^{(k)}=\N_{11}^{-1}+\mathbf{S}_3^{(k)}(\mathbf{S}_2^{(k)})^{-1}(\mathbf{S}_3^{(k)})^\top,\quad
+	\mathbf{K}_{12}^{(k)}=-\mathbf{S}_3^{(k)}(\mathbf{S}_2^{(k)})^{-1},\quad
+	\mathbf{K}_{22}^{(k)}=(\mathbf{S}_2^{(k)})^{-1}.
+\end{equation}
+To update \eqref{eq:K_blocks} from step $k$ to $k+1$, substitute the bordered updates of $\mathbf{S}_3$ and $\mathbf{S}_2^{-1}$. The off-diagonal blocks are updated as
+\begin{align}
+	\K_{12}^{(k+1)}=-\mathbf{S}_3^{(k+1)}(\mathbf{S}_2^{(k+1)})^{-1}
+	&=
+	-\begin{bmatrix} \mathbf{S}_3^{(k)} & \s_e^{(k+1)} \end{bmatrix}
+	\begin{bmatrix}
+		(\mathbf{S}_2^{(k)})^{-1}+\frac{1}{\sigma_{k+1}}\v_{k+1}\v_{k+1}^\top & -\frac{1}{\sigma_{k+1}}\v_{k+1} \\[4pt]
+		-\frac{1}{\sigma_{k+1}}\v_{k+1}^\top & \frac{1}{\sigma_{k+1}}
+	\end{bmatrix} \nonumber \\
+	&=
+	-\begin{bmatrix}
+		\mathbf{S}_3^{(k)}(\mathbf{S}_2^{(k)})^{-1}+\frac{1}{\sigma_{k+1}}\z_{k+1}\v_{k+1}^\top &
+		-\frac{1}{\sigma_{k+1}}\z_{k+1}
+	\end{bmatrix}= \nonumber \\
+	&=\begin{bmatrix}
+		\K_{12}^{(k)}-\frac{1}{\sigma_{k+1}}\z_{k+1}\v_{k+1}^\top &
+		\frac{1}{\sigma_{k+1}}\z_{k+1}
+	\end{bmatrix}
+\end{align}
+where $\z_{k+1}\coloneqq \mathbf{S}_3^{(k)}\v_{k+1}-\s_e^{(k+1)}$ is an auxiliary vector. With this definition, the top-left block of \eqref{eq:MWP_inv_compact} is updated as
+\begin{align}
+	\K_{11}^{(k+1)}&=\N_{11}^{-1}+\mathbf{S}_3^{(k+1)}(\mathbf{S}_2^{(k+1)})^{-1}(\mathbf{S}_3^{(k+1)})^\top
+	=\nonumber\\
+	&=\N_{11}^{-1}+\begin{bmatrix}
+		\mathbf{S}_3^{(k)}(\mathbf{S}_2^{(k)})^{-1}+\frac{1}{\sigma_{k+1}}\z_{k+1}\v_{k+1}^\top &
+		-\frac{1}{\sigma_{k+1}}\z_{k+1}
+	\end{bmatrix}
+	\begin{bmatrix} (\mathbf{S}_3^{(k)})^\top \\ \s_{k+1}^\top \end{bmatrix}= \nonumber \\
+	&= \N_{11}^{-1}+\mathbf{S}_3^{(k)}(\mathbf{S}_2^{(k)})^{-1}(\mathbf{S}_3^{(k)})^\top+\frac{1}{\sigma_{k+1}}\z_{k+1}\z_{k+1}^\top=\K_{11}^{(k)}+\frac{1}{\sigma_{k+1}}\z_{k+1}\z_{k+1}^\top.
+\end{align}
+
+Define the weighted sum of active edge incidence vectors $\mathbf{w}_{k+1}\coloneqq\C_{\mathcal{W}_k}^\top\v_{k+1}\in\mathbb{R}^D$ and the scalar $s_{k+1}\coloneqq\mathbf{1}_{|\mathcal{W}_k|}^\top\v_{k+1}$. The vector $\z_{k+1}$ follows without forming $\S_3^{(k)}$. From \eqref{eq:U_def},
+\begin{equation}
+	\S_3^{(k)}\v_{k+1}
+	=
+	\begin{bmatrix}
+		\displaystyle\frac{1}{D}\mathbf{w}_{k+1} - \frac{D-2}{D^2(D-1)}s_{k+1}\mathbf{1}_D\\[10pt]
+		\displaystyle -\frac{1}{D(D-1)}s_{k+1}
+	\end{bmatrix}.
+\end{equation}
+Subtracting the new column $\s_{k+1}$ from \eqref{eq:s_e} gives
+\begin{equation}
+	\label{eq:z_update_vec}
+	\z_{k+1}
+	=
+	\S_3^{(k)}\v_{k+1}-\s_{k+1}
+	=
+	\begin{bmatrix}
+		\displaystyle\frac{1}{D}(\mathbf{w}_{k+1}-\c_{k+1}) - \frac{D-2}{D^2(D-1)}(s_{k+1}-1)\mathbf{1}_D\\[10pt]
+		\displaystyle -\frac{1}{D(D-1)}(s_{k+1}-1)
+	\end{bmatrix}.
+\end{equation}
+Consequently $\S_3^{(k)}$ itself never needs to be stored. The only edge-related object that must be maintained is the active incidence matrix $\C_{\mathcal{W}_k}$ (equivalently, the list of active edges); from it, $\mathbf{w}_{k+1}=\C_{\mathcal{W}_k}^\top\v_{k+1}$ and $s_{k+1}=\mathbf{1}_{|\mathcal{W}_k|}^\top\v_{k+1}$ are formed on the fly for each new edge, and \eqref{eq:z_update_vec} produces $\z_{k+1}$ directly.
+
+
+Finally, the bottom-right block of \eqref{eq:MWP_inv_compact} is $\mathbf{K}_{22}^{(k+1)}=(\mathbf{S}_2^{(k+1)})^{-1}$, which is obtained directly from the block inversion of \eqref{eq:S2_inv_update}
+\begin{equation}
+(\K_{22}^{(k+1)})^{-1} = \begin{bmatrix} (\K_{22}^{(k)})^{-1} + \frac{1}{\sigma_{k+1}}\v_{k+1}\v_{k+1}^\top & -\frac{1}{\sigma_{k+1}}\v_{k+1} \\[2pt] -\frac{1}{\sigma_{k+1}}\v_{k+1}^\top & \frac{1}{\sigma_{k+1}} \end{bmatrix}.
+\end{equation}
+As a result, the four blocks of \eqref{eq:MWP_inv_compact} become
+\begin{equation}
+	\label{eq:MWP_inv_update}
+	(\M_{\mathcal{W}_{k+1}}|\P)^{-1}
+	=
+	-\begin{bmatrix}
+		\mathbf{K}_{11}^{(k)}+\frac{1}{\sigma_{k+1}}\z_{k+1}\z_{k+1}^\top &
+		\mathbf{K}_{12}^{(k)}-\frac{1}{\sigma_{k+1}}\z_{k+1}\v_{k+1}^\top &
+		\frac{1}{\sigma_{k+1}}\z_{k+1} \\[6pt]
+		\mathbf{K}_{21}^{(k)}-\frac{1}{\sigma_{k+1}}\v_{k+1}\z_{k+1}^\top &
+		\mathbf{K}_{22}^{(k)}+\frac{1}{\sigma_{k+1}}\v_{k+1}\v_{k+1}^\top &
+		-\frac{1}{\sigma_{k+1}}\v_{k+1} \\[6pt]
+		\frac{1}{\sigma_{k+1}}\z_{k+1}^\top &
+		-\frac{1}{\sigma_{k+1}}\v_{k+1}^\top &
+		\frac{1}{\sigma_{k+1}}
+	\end{bmatrix}.
+\end{equation}
+Equivalently, as a single rank-1 downdate of the bordered old inverse,
+\begin{equation}
+	\label{eq:MWP_inv_update_rank1}
+	(\M_{\mathcal{W}_{k+1}}|\P)^{-1}
+	=
+	\begin{bmatrix}
+		(\M_{\mathcal{W}_{k}}|\P)^{-1} & \mathbf{0} \\[2pt]
+		\mathbf{0}^\top & 0
+	\end{bmatrix}
+	-
+	\frac{1}{\sigma_{k+1}}
+	\begin{bmatrix}
+		\z_{k+1} \\[2pt] -\v_{k+1} \\[2pt] 1
+	\end{bmatrix}
+	\begin{bmatrix}
+		\z_{k+1}^\top & -\v_{k+1}^\top & 1
+	\end{bmatrix}.
+\end{equation}
+Recall from \eqref{eq:as_kkt} that the KKT system we solve at each active-set iteration is
+\begin{equation}
+	\M_\mathcal{W}
+	\begin{bmatrix}
+		\lh_\mathcal{W} \\
+		\boldsymbol{\nu}_\mathcal{W}
+	\end{bmatrix}
+	=
+	\begin{bmatrix}
+		\q \\
+		\tilde{\b}_\mathcal{W}
+	\end{bmatrix},\quad
+	\text{where }\ 
+	\M_\mathcal{W}\coloneqq\begin{bmatrix}
+		\P & \tilde{\A}_\mathcal{W}^\top \\
+		\tilde{\A}_\mathcal{W} & \mathbf{0}
+	\end{bmatrix}.
+\end{equation}
+The block inverse of the KKT matrix is
+\begin{equation}
+	\label{eq:MW_full_inv}
+	\M_\mathcal{W}^{-1}
+	=
+	\begin{bmatrix}
+		\P^{-1}+\P^{-1}\tilde{\A}_\mathcal{W}^\top(\M_\mathcal{W}|\P)^{-1}\tilde{\A}_\mathcal{W}\P^{-1} & -\P^{-1}\tilde{\A}_\mathcal{W}^\top(\M_\mathcal{W}|\P)^{-1} \\[6pt]
+		-(\M_\mathcal{W}|\P)^{-1}\tilde{\A}_\mathcal{W}\P^{-1} & (\M_\mathcal{W}|\P)^{-1}
+	\end{bmatrix}.
+\end{equation}
+The two block rows of \eqref{eq:as_kkt} read
+\begin{equation}
+	\label{eq:kkt_primal_block}
+	\P\lh_\mathcal{W}+\tilde{\A}_\mathcal{W}^\top\boldsymbol{\nu}_\mathcal{W}=\q,
+	\qquad
+	\tilde{\A}_\mathcal{W}\lh_\mathcal{W}=\tilde{\b}_\mathcal{W}.
+\end{equation}
+Eliminating $\lh_\mathcal{W}$ from the first equation and substituting into the second yields
+\begin{equation}
+	\tilde{\A}_\mathcal{W}\P^{-1}\tilde{\A}_\mathcal{W}^\top\boldsymbol{\nu}_\mathcal{W}
+	=
+	\tilde{\A}_\mathcal{W}\P^{-1}\q-\tilde{\b}_\mathcal{W}.
+\end{equation}
+Writing $\mathbf{r}\coloneqq\tilde{\A}_\mathcal{W}\P^{-1}\q - \tilde{\b}_\mathcal{W}$ and recalling that the Schur complement is $\M_\mathcal{W}|\P=-\tilde{\A}_\mathcal{W}\P^{-1}\tilde{\A}_\mathcal{W}^\top$, the dual variables satisfy
+\begin{equation}
+	\label{eq:dual_schur_system}
+	(\M_\mathcal{W}|\P)\boldsymbol{\nu}_\mathcal{W}=-\mathbf{r},
+	\qquad\text{so}\qquad
+	\boldsymbol{\nu}_\mathcal{W}=-(\M_\mathcal{W}|\P)^{-1}\mathbf{r}.
+\end{equation}
+The rank-1 update \eqref{eq:MWP_inv_update_rank1} gives an immediate update formula when an edge is added to the working set. The residual vector is bordered as
+\begin{equation}
+	\label{eq:r_update}
+	\mathbf{r}^{(k+1)}
+	\coloneqq
+	\tilde{\A}_{\mathcal{W}_{k+1}}\P^{-1}\q - \tilde{\b}_{\mathcal{W}_{k+1}}
+	=
+	\begin{bmatrix}
+		\mathbf{r}^{(k)} \\ r_{k+1}
+	\end{bmatrix},
+	\qquad
+	r_{k+1}\coloneqq \tilde{\a}_{k+1}^\top\P^{-1}\q - \tilde{b}_{k+1},
+\end{equation}
+where $\tilde{\a}_{k+1}^\top$ and $\tilde{b}_{k+1}$ are the new row of $\tilde{\A}_{\mathcal{W}_{k+1}}$ and the corresponding entry of $\tilde{\b}_{\mathcal{W}_{k+1}}$, respectively. Substituting \eqref{eq:MWP_inv_update_rank1} and \eqref{eq:r_update} into $\boldsymbol{\nu}_{\mathcal{W}_{k+1}}=-(\M_{\mathcal{W}_{k+1}}|\P)^{-1}\mathbf{r}^{(k+1)}$ gives
+\begin{multline}
+	\boldsymbol{\nu}_{\mathcal{W}_{k+1}}
+	=
+	-
+	\begin{bmatrix}
+		(\M_{\mathcal{W}_{k}}|\P)^{-1} & \mathbf{0} \\
+		\mathbf{0}^\top & 0
+	\end{bmatrix}
+	\begin{bmatrix}
+		\mathbf{r}^{(k)} \\ r_{k+1}
+	\end{bmatrix}
+	+
+	\frac{1}{\sigma_{k+1}}
+	\begin{bmatrix}
+		\z_{k+1} \\ -\v_{k+1} \\ 1
+	\end{bmatrix}
+	\begin{bmatrix}
+		\z_{k+1}^\top & -\v_{k+1}^\top & 1
+	\end{bmatrix}
+	\begin{bmatrix}
+		\mathbf{r}^{(k)} \\ r_{k+1}
+	\end{bmatrix}.
+\end{multline}
+The first term is the old dual vector padded with a zero, because $\boldsymbol{\nu}_{\mathcal{W}_k}=-(\M_{\mathcal{W}_{k}}|\P)^{-1}\mathbf{r}^{(k)}$. Define the scalar
+\begin{equation}
+	\label{eq:tau_update}
+	\tau_{k+1}
+	\coloneqq
+	\begin{bmatrix}
+		\z_{k+1}^\top & -\v_{k+1}^\top & 1
+	\end{bmatrix}
+	\mathbf{r}^{(k+1)}
+	=
+	\z_{k+1}^\top\mathbf{r}_1 - \v_{k+1}^\top\mathbf{r}_2^{(k)} + r_{k+1}.
+\end{equation}
+Therefore the dual variables update by the rank-1 correction
+\begin{equation}
+	\label{eq:nu_update}
+	\boldsymbol{\nu}_{\mathcal{W}_{k+1}}
+	=
+	\begin{bmatrix}
+		\boldsymbol{\nu}_{\mathcal{W}_k} \\ 0
+	\end{bmatrix}
+	+
+	\frac{\tau_{k+1}}{\sigma_{k+1}}
+	\begin{bmatrix}
+		\z_{k+1} \\ -\v_{k+1} \\ 1
+	\end{bmatrix}.
+\end{equation}
+Partitioning $\boldsymbol{\nu}_{\mathcal{W}_{k+1}}=[\boldsymbol{\mu}_{k+1}^\top,\boldsymbol{\eta}_{\mathcal{W}_{k+1}}^\top]^\top$, this is equivalent to
+\begin{equation}
+	\label{eq:eta_mu_update_direct}
+	\boldsymbol{\mu}_{k+1}
+	=
+	\boldsymbol{\mu}_k + \frac{\tau_{k+1}}{\sigma_{k+1}}\z_{k+1},
+	\qquad
+	\boldsymbol{\eta}_{\mathcal{W}_{k+1}}
+	=
+	\begin{bmatrix}
+		\boldsymbol{\eta}_{\mathcal{W}_k} \\ 0
+	\end{bmatrix}
+	-
+	\frac{\tau_{k+1}}{\sigma_{k+1}}
+	\begin{bmatrix}
+		\v_{k+1} \\ -1
+	\end{bmatrix}.
+\end{equation}
+
+Finally, the primal iterate follows from the first block row of \eqref{eq:as_kkt}. Eliminating $\lh_\mathcal{W}$ from \eqref{eq:kkt_primal_block} gives
+\begin{equation}
+	\label{eq:lambda_from_nu}
+	\lh_{\mathcal{W}}
+	=
+	\P^{-1}\q - \P^{-1}\tilde{\A}_{\mathcal{W}}^\top\boldsymbol{\nu}_{\mathcal{W}}.
+\end{equation}
+Substituting \eqref{eq:nu_update} yields
+\begin{equation}
+	\label{eq:lambda_update}
+	\lh_{\mathcal{W}_{k+1}}
+	=
+	\lh_{\mathcal{W}_k}
+	-
+	\frac{\tau_{k+1}}{\sigma_{k+1}}\P^{-1}\tilde{\A}_{\mathcal{W}_{k+1}}^\top
+	\begin{bmatrix}
+		\z_{k+1} \\ -\v_{k+1} \\ 1
+	\end{bmatrix}.
+\end{equation}
+
+\subsection{Removing an edge}
+\label{subsec:removing_edge}
+
+Let the current working set be $\mathcal{W}_k$, with $|\mathcal{W}_k|=m$, and let $j\in\{1,\dots,m\}$ be the position of the edge that is dropped. Write $\mathcal{W}_{k+1}\coloneqq\mathcal{W}_k\setminus\{e_j\}$, and let $\c_{k+1}\in\{0,1\}^D$ be the incidence vector of the removed edge (the $j$-th row of $\C_{\mathcal{W}_k}$). Let $\mathbf{P}_j\in\{0,1\}^{m\times m}$ be the permutation matrix that moves the $j$-th active edge to the last position. Then the current Schur-complement matrix can be written in the same bordered form used for additions,
+\begin{equation}
+	\label{eq:S2_border_remove}
+	\mathbf{P}_j\mathbf{S}_2^{(k)}\mathbf{P}_j^\top
+	=
+	\begin{bmatrix}
+		\mathbf{S}_2^{(k+1)} & \u_{k+1} \\
+		\u_{k+1}^\top & \gamma_{k+1}
+	\end{bmatrix},
+\end{equation}
+where $\mathbf{S}_2^{(k+1)}\in\R^{(m-1)\times(m-1)}$ is the Schur complement after removal and $\u_{k+1}\in\R^{m-1}$, $\gamma_{k+1}\in\R$ are the column and diagonal entry associated with the leaving edge. All the information needed to recover $(\mathbf{S}_2^{(k+1)})^{-1}$ is contained in the maintained inverse $(\mathbf{S}_2^{(k)})^{-1}$. To see this, write the Schur-complement inverse of the bordered matrix~
+\eqref{eq:S2_border_remove}:
+\begin{equation}
+	\mathbf{P}_j(\mathbf{S}_2^{(k)})^{-1}\mathbf{P}_j^\top
+	=
+	\begin{bmatrix}
+		(\mathbf{S}_2^{(k+1)})^{-1}+\frac{1}{\sigma_{k+1}}(\mathbf{S}_2^{(k+1)})^{-1}\u_{k+1}\u_{k+1}^\top(\mathbf{S}_2^{(k+1)})^{-1} & -\frac{1}{\sigma_{k+1}}(\mathbf{S}_2^{(k+1)})^{-1}\u_{k+1} \\[6pt]
+		-\frac{1}{\sigma_{k+1}}\u_{k+1}^\top(\mathbf{S}_2^{(k+1)})^{-1} & \frac{1}{\sigma_{k+1}}
+	\end{bmatrix},
+\end{equation}
+where $\sigma_{k+1}\coloneqq\gamma_{k+1}-\u_{k+1}^\top(\mathbf{S}_2^{(k+1)})^{-1}\u_{k+1}$ is the scalar Schur complement. The bottom-right entry and the off-diagonal column of the permuted maintained inverse are therefore
+\begin{equation}
+	d_{k+1}\coloneqq[\mathbf{P}_j(\mathbf{S}_2^{(k)})^{-1}\mathbf{P}_j^\top]_{mm}=\frac{1}{\sigma_{k+1}},
+	\
+	\tilde{\v}_{k+1}\coloneqq(\mathbf{P}_j(\mathbf{S}_2^{(k)})^{-1}\mathbf{P}_j^\top)_{\setminus m,m}=-\frac{1}{\sigma_{k+1}}(\mathbf{S}_2^{(k+1)})^{-1}\u_{k+1}.
+\end{equation}
+Because $\mathbf{P}_j$ only reorders rows and columns, these are exactly the $j$-th diagonal entry and the $j$-th off-diagonal column of $(\mathbf{S}_2^{(k)})^{-1}$; equivalently,
+\begin{equation}
+	d_{k+1}=[(\mathbf{S}_2^{(k)})^{-1}]_{jj},
+	\qquad
+	\tilde{\v}_{k+1}=((\mathbf{S}_2^{(k)})^{-1})_{\setminus j,j}.
+\end{equation}
+Solving for $(\mathbf{S}_2^{(k+1)})^{-1}\u_{k+1}$ gives the auxiliary vector
+\begin{equation}
+	\label{eq:v_downdate}
+	\v_{k+1}\coloneqq(\mathbf{S}_2^{(k+1)})^{-1}\u_{k+1}=-\frac{1}{d_{k+1}}\tilde{\v}_{k+1}.
+\end{equation}
+Finally, the top-left block of the maintained inverse reads
+\begin{equation}
+	((\mathbf{S}_2^{(k)})^{-1})_{\setminus j,\setminus j}
+	=
+	(\mathbf{S}_2^{(k+1)})^{-1}+\frac{1}{\sigma_{k+1}}\v_{k+1}\v_{k+1}^\top,
+\end{equation}
+so isolating $(\mathbf{S}_2^{(k+1)})^{-1}$ yields
+\begin{equation}
+	\label{eq:S2_inv_downdate}
+	(\mathbf{S}_2^{(k+1)})^{-1}
+	=
+	((\mathbf{S}_2^{(k)})^{-1})_{\setminus j,\setminus j}
+	-
+	\frac{1}{d_{k+1}}\tilde{\v}_{k+1}\tilde{\v}_{k+1}^\top.
+\end{equation}
+
+Next, let $\C^{(k+1)}$ denote the active incidence matrix $\C_{\mathcal{W}_k}$ with row $j$ removed, and define
+\begin{equation}
+	\w_{k+1}\coloneqq(\C^{(k+1)})^\top\v_{k+1},
+	\qquad
+	s_{k+1}\coloneqq\mathbf{1}_{m-1}^\top\v_{k+1}.
+\end{equation}
+The vector $\z$ for the downdate is computed from these quantities and from the incidence vector $\c_{k+1}$ of the removed edge,
+\begin{equation}
+	\label{eq:z_downdate_remove}
+	\z_{k+1}
+	=
+	\begin{bmatrix}
+		\displaystyle\frac{1}{D}(\w_{k+1}-\c_{k+1})-\frac{D-2}{D^2(D-1)}(s_{k+1}-1)\mathbf{1}_D \\[10pt]
+		\displaystyle-\frac{1}{D(D-1)}(s_{k+1}-1)
+	\end{bmatrix}.
+\end{equation}
+Equivalently, $\z_{k+1}=\mathbf{S}_3^{(k+1)}\v_{k+1}-\s_{k+1}$, where $\mathbf{S}_3^{(k+1)}$ is the reduced $\mathbf{S}_3$ matrix and $\s_{k+1}$ is the column of $\mathbf{S}_3^{(k)}$ associated with the removed edge.
+
+Because the current inverse $(\M_{\mathcal{W}_k}|\P)^{-1}$ was obtained from $(\M_{\mathcal{W}_{k+1}}|\P)^{-1}$ by the rank-1 update in~\eqref{eq:MWP_inv_update_rank1}, removing the edge amounts to reversing that correction. The multiplier of the leaving edge is the $(D+1+j)$-th entry of the current dual vector,
+\begin{equation}
+	\alpha_{k+1}\coloneqq[\boldsymbol{\nu}_{\mathcal{W}_k}]_{D+1+j}.
+\end{equation}
+Reversing the rank-1 correction gives the reduced dual vector
+\begin{equation}
+	\label{eq:nu_downdate}
+	\boldsymbol{\nu}_{\mathcal{W}_{k+1}}
+	=
+	(\boldsymbol{\nu}_{\mathcal{W}_k})_{\setminus(D+1+j)}
+	-
+	\alpha_{k+1}
+	\begin{bmatrix}
+		\z_{k+1} \\ -\v_{k+1}
+	\end{bmatrix}.
+\end{equation}
+Finally, using $\lh_{\mathcal{W}_k}=\P^{-1}\q-\P^{-1}\tilde{\A}_{\mathcal{W}_k}^\top\boldsymbol{\nu}_{\mathcal{W}_k}$, the primal iterate is updated as
+\begin{equation}
+	\label{eq:lambda_downdate}
+	\lh_{\mathcal{W}_{k+1}}
+	=
+	\lh_{\mathcal{W}_k}
+	+
+	\alpha_{k+1}
+	\P^{-1}
+	\tilde{\A}_{\mathcal{W}_k}^\top
+	\begin{bmatrix}
+		\z_{k+1} \\ -\v_{k+1} \\ 1
+	\end{bmatrix},
+\end{equation}
+and the active residual is shortened by deleting the $j$-th entry, $\r_2^{(k+1)}=(\r_2^{(k)})_{\setminus j}$.
+
+The arithmetic cost of a removal is again dominated by the rank-1 downdate of $(\mathbf{S}_2^{(k)})^{-1}$ and by the matrix--vector products involving $\C^{(k+1)}$, so it is $\mathcal{O}((D+|\mathcal{W}_k|)^2)$. Algorithm~\ref{alg:active_set_remove_edge} collects these steps in pseudocode.
+
+\begin{remark}
+	Note that the dual variables $\boldsymbol{\mu}$ and $\boldsymbol{\eta}_\mathcal{W}$ are not computed merely as an intermediate step for obtaining $\lh_\mathcal{W}$. In an active-set method they are essential: their signs govern which constraints enter or leave the working set, and they are required for the optimality test at each iteration. Maintaining the full primal-dual pair $(\lh_\mathcal{W},\boldsymbol{\nu}_\mathcal{W})$ is therefore unavoidable, and the rank-1 updates \eqref{eq:nu_update} and \eqref{eq:nu_downdate} reuse the duals at no extra cost.
+\end{remark}
+
+The rank-1 update formulas derived above are used by the active-set iteration in Section~\ref{sec:active_set_method}; the corresponding pseudocode is given in Algorithms~\ref{alg:active_set_add_edge} and~\ref{alg:active_set_remove_edge}.
+
+\end{appendices}
+
+\end{document}

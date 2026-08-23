@@ -1,0 +1,394 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
+        },
+        {
+            "name": "run_gl.py (glama/stat)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--algorithm", "glama",
+                "--data_set", "stat",
+                "--dim", "20",
+                "--n_samples", "100000",
+                "--gamma", "1e-3",
+                "--delta", "1e-1",
+                "--rho", "1e-3",
+                "--n_iters", "100",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "run_gl.py (glama/fmri)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--algorithm", "glama",
+                "--data_set", "fmri",
+                "--gamma", "1e-3",
+                "--delta", "1e-1",
+                "--rho", "1e-3",
+                "--n_iters", "100",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "run_gl.py (smooth/stat)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--algorithm", "smooth",
+                "--data_set", "stat",
+                "--dim", "20",
+                "--n_samples", "100000",
+                "--alpha", "1e-2",
+                "--beta", "10",
+                "--n_iters", "100",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "run_gl.py (smooth/fmri)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--algorithm", "smooth",
+                "--data_set", "fmri",
+                "--alpha", "1e-2",
+                "--beta", "0.3",
+                "--sim_time", "30",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "run_gl.py (poly/stat)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--algorithm", "poly",
+                "--data_set", "stat",
+                "--dim", "20",
+                "--n_samples", "100000",
+                "--deg", "2",
+                "--alpha", "4",
+                "--n_iters", "100",
+                "--seed", "2"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "run_gl.py (poly/fmri)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--algorithm", "poly",
+                "--data_set", "fmri",
+                "--deg", "2",
+                "--alpha", "4",
+                "--n_iters", "100",
+                "--seed", "2"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "run_gl.py (pgl/stat)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--algorithm", "pgl",
+                "--data_set", "stat",
+                "--dim", "20",
+                "--n_samples", "100000",
+                "--rho", "0.1",
+                "--eta", "1e-1",
+                "--n_iters", "10",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "run_gl.py (pgl/fmri)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--algorithm", "pgl",
+                "--data_set", "fmri",
+                "--rho", "0.1",
+                "--eta", "1e-1",
+                "--n_iters", "10",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "gl_glama.py (stat)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/gl_glama.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "stat",
+                "--dim", "20",
+                "--n_samples", "100000",
+                "--gamma", "1e-3",
+                "--delta", "1e-1",
+                "--rho", "1e-3",
+                "--n_iters", "100",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "gl_glama.py (fmri)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/gl_glama.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "fmri",
+                "--gamma", "1e-3",
+                "--delta", "1e-1",
+                "--rho", "1e-3",
+                "--n_iters", "100",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "gl_smooth.py (stat)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/gl_smooth.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "stat",
+                "--dim", "20",
+                "--n_samples", "100000",
+                "--alpha", "1e-2",
+                "--beta", "0.3",
+                "--n_iters", "100",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "gl_smooth.py (fmri)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/gl_smooth.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "fmri",
+                "--alpha", "1e-2",
+                "--beta", "0.3",
+                "--sim_time", "30",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "gl_poly.py (stat)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/gl_poly.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "stat",
+                "--dim", "20",
+                "--n_samples", "100000",
+                "--deg", "2",
+                "--alpha", "4",
+                "--n_iters", "100",
+                "--seed", "2"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "gl_poly.py (fmri)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/gl_poly.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "fmri",
+                "--deg", "2",
+                "--alpha", "4",
+                "--n_iters", "100",
+                "--seed", "2"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "gl_pgl.py (stat)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/gl_pgl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "stat",
+                "--dim", "20",
+                "--n_samples", "100000",
+                "--rho", "0.1",
+                "--eta", "1e-1",
+                "--n_iters", "10",
+                "--seed", "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "joint_dl_gl.py (synth smooth)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/joint_dl_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "synth",
+                "--method", "smooth",
+                "--graph_learn", "glama",
+                "--dim", "100",
+                "--n_atoms", "200",
+                "--n_iters", "100",
+                "--batch_size", "2500",
+                "--alpha", "0.001",
+                "--gamma", "1e-3",
+                "--rho", "1e-2",
+                "--seed", "42"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "joint_dl_gl.py (fmri smooth)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/joint_dl_gl.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "fmri",
+                "--method", "smooth",
+                "--graph_learn", "glama",
+                "--n_atoms", "200",
+                "--n_iters", "100",
+                "--batch_size", "2500",
+                "--alpha", "0.001",
+                "--gamma", "1e-3",
+                "--rho", "1e-2",
+                "--seed", "42"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "benchmark_l_update.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/benchmark_l_update.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--dim", "100",
+                "--deg", "2",
+                "--alpha", "4",
+                "--n_samples", "1000",
+                "--n_iters", "100",
+                "--mode", "normal"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "grid_search_gl_glama.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/grid_search_gl_glama.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "--data_set", "stat",
+                "--n_iters", "1",
+                "--sim_time", "30",
+                "--test_interval", "10"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "plot_grid_search.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/plot_grid_search.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
+        },
+        {
+            "name": "plot_learning_curves.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/plot_learning_curves.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
+        },
+        {
+            "name": "plot_var_n_samples.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/plot_var_n_samples.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
+        },
+        {
+            "name": "pytest",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["tests"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "justMyCode": false
+        }
+    ]
+}
