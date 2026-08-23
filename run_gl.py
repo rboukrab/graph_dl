@@ -9,17 +9,15 @@ python run_gl.py --algorithm pgl --rho 0.1 --eta 1e-1
 """
 
 import argparse
+import sys
+from typing import Union
 
 import torch
 
 from joint_ol_gl.runners import RUNNERS, load_dataset
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Unified graph-learning experiment runner",
-        conflict_handler="resolve",
-    )
+def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--algorithm",
         type=str,
@@ -60,16 +58,43 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dim", type=int, default=20, help="Graph dimension")
     parser.add_argument("--seed", type=int, default=1, help="Random seed")
 
-    # Collect all algorithm-specific arguments in one parser.
-    for runner_cls in RUNNERS.values():
-        runner_cls.add_args(parser)
 
-    return parser
+def build_parser() -> Union[argparse.ArgumentParser, argparse.Namespace]:
+    # For --help, show all possible arguments (legacy behavior).
+    if "--help" in sys.argv or "-h" in sys.argv:
+        parser = argparse.ArgumentParser(
+            description="Unified graph-learning experiment runner",
+            conflict_handler="resolve",
+        )
+        _add_common_args(parser)
+        for runner_cls in RUNNERS.values():
+            runner_cls.add_args(parser)
+        return parser
+
+    # Two-pass parse: first resolve the algorithm and common args, then add only
+    # the selected runner's arguments. This avoids default-value collisions
+    # between runners that share option names (e.g. --tol, --max_iter).
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    _add_common_args(pre_parser)
+    known, remaining = pre_parser.parse_known_args()
+
+    parser = argparse.ArgumentParser(
+        description="Unified graph-learning experiment runner",
+    )
+    _add_common_args(parser)
+    RUNNERS[known.algorithm].add_args(parser)
+    # Re-inject --algorithm so the full parser sees its required argument.
+    full_argv = [f"--algorithm", known.algorithm, *remaining]
+    args = parser.parse_args(full_argv, namespace=known)
+    return args
 
 
 def main() -> None:
-    parser = build_parser()
-    args = parser.parse_args()
+    parser_or_args = build_parser()
+    if isinstance(parser_or_args, argparse.ArgumentParser):
+        parser_or_args.parse_args()
+        return
+    args = parser_or_args
 
     device = args.device
     if device is None:

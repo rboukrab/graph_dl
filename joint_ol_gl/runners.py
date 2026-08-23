@@ -370,24 +370,29 @@ class SmoothRunner(GraphLearningRunner):
         else:
             graph_vol = 100.0
 
+        # Use the identity initial Laplacian for all inner solvers so that the
+        # smoothness update starts from the same point.
+        L0 = torch.eye(self.dim, device=self.device)
+
         if self.args.solver == "projadmm2":
             self.graph_learner = ProjADMM2(
                 dim=self.dim,
                 mode=self.args.admm_mode,
-                L=(10 + 10 / 99) * torch.eye(self.dim, device=self.device)
-                - (10 / 99) * torch.ones((self.dim, self.dim), device=self.device),
+                L=L0,
                 vol=graph_vol,
                 device=self.device,
             )
         elif self.args.solver == "activeset":
             self.graph_learner = LaplacianActiveSet(
                 dim=self.dim,
+                L=L0,
                 vol=graph_vol,
                 device=self.device,
             )
         else:
             self.graph_learner = LaplacianIPMSparse(
                 dim=self.dim,
+                L=L0,
                 vol=graph_vol,
                 device=self.device,
                 eps_in=1e-3,
@@ -407,6 +412,7 @@ class SmoothRunner(GraphLearningRunner):
         self.graph_learner.forward(
             F_t=H_k, tolerance=self.tol, max_iter=self.max_iter
         )
+
 
     def get_graph_matrix(self) -> torch.Tensor:
         return self.graph_learner.L.detach().clone()

@@ -755,6 +755,31 @@ class ProjADMM2:
             values=1. / (self.P.values() + self.rho)
         ).to(device)
 
+        # Dense equality matrix A (built manually to avoid the unreliable
+        # ``torch.sparse.Tensor.to_dense()`` implementation on this PyTorch
+        # build).  It is only (dim+1) x m, so keeping it dense is cheap and
+        # lets us pre-compute (A R^{-1} A^T)^{-1} exactly.
+        m = dim * (dim + 1) // 2
+        A_dense = torch.zeros((dim + 1, m), dtype=torch.float64, device=device)
+        for i in range(dim):
+            for j in range(dim):
+                if j >= i:
+                    pos = i * dim + j - i * (i + 1) // 2
+                else:
+                    pos = j * dim + i - j * (j + 1) // 2
+                A_dense[i, pos] = 1.0
+        for i in range(dim):
+            A_dense[dim, i * (2 * dim - i + 1) // 2] = 1.0
+
+        Rinv_c = self.Rinv.coalesce()
+        Rinv_dense = torch.zeros(m, dtype=torch.float64, device=device)
+        Rinv_dense[Rinv_c.indices()[1]] = Rinv_c.values().to(torch.float64)
+
+        ARinvAT = (A_dense * Rinv_dense) @ A_dense.T
+        self._A_Rinv_AT_inv = torch.from_numpy(
+            np.linalg.inv(ARinvAT.detach().cpu().numpy())
+        ).to(device=device, dtype=torch.float32)
+
         # Matrix B
         index_ineq = torch.tensor([
             [i for i in range(int(dim * (dim - 1) / 2))],
@@ -852,12 +877,10 @@ class ProjADMM2:
                 l_old = self.l.detach().clone()
                 r = q + self.rho * (self.z + self.v)
                 s = self.A @ self.Rinv @ r - self.b
-                s1 = s[:self.dim]
-                s2 = s[self.dim]
-                t = torch.cat([
-                    ((2 + self.rho) / (self.dim + self.rho)) * s1 + (self.delta1 * s1.sum() + self.delta2 * s2) * torch.ones(self.dim, device=self.device),
-                    torch.tensor([self.delta2 * s1.sum() + self.delta3 * s2], device=self.device)
-                ])
+                # Dual variable update using the precomputed exact inverse of
+                # A R^{-1} A^T (the previous analytic formula did not match the
+                # true inverse, which left equality constraints unsatisfied).
+                t = self._A_Rinv_AT_inv @ s
                 self.l = self.Rinv @ (r - self.A.T @ t)
                 w = self.l - self.v
                 self.z[self.idx_on] = w[self.idx_on]
