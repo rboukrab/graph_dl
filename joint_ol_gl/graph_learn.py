@@ -1326,34 +1326,48 @@ class LaplacianActiveSet:
             max_iter = 10 * self.D_minus
         self.max_iter = int(max_iter)
 
-        # Duplication matrix D: vec(L) = D l.  Built explicitly to avoid
-        # the unreliable torch.sparse.Tensor.to_dense() on this PyTorch build.
+        # Sparse duplication matrix D: vec(L) = D l.
         index_dup, value_dup = duplication_matrix(dim)
-        m = dim * (dim + 1) // 2
-        D_dense = torch.zeros((dim * dim, m), dtype=torch.float64,
-                              device=device)
-        for k in range(index_dup.shape[1]):
-            D_dense[index_dup[1, k].item(), index_dup[0, k].item()] = float(
-                value_dup[k].item()
-            )
-        self.D = D_dense
+        self.m = dim * (dim + 1) // 2
+        self.D = torch.sparse_coo_tensor(
+            index_dup, value_dup.to(dtype=torch.float64),
+            size=(self.m, dim * dim),
+            device=device
+        ).T.coalesce()
 
-        # Equality constraints: row sums zero + trace = vol.
-        A1_vec = torch.zeros((dim, dim * dim), dtype=torch.float64,
-                             device=device)
+        # Sparse equality matrix A: row sums zero + trace = vol.
+        a1_rows, a1_cols = [], []
         for i in range(dim):
-            A1_vec[i, i * dim:(i + 1) * dim] = 1.0
-        a2_vec = torch.zeros((1, dim * dim), dtype=torch.float64,
-                             device=device)
-        for i in range(dim):
-            a2_vec[0, i * dim + i] = 1.0
-        self.A = torch.vstack([A1_vec @ self.D, a2_vec @ self.D])
+            for j in range(dim):
+                if j >= i:
+                    pos = i * dim + j - i * (i + 1) // 2
+                else:
+                    pos = j * dim + i - j * (j + 1) // 2
+                a1_rows.append(i)
+                a1_cols.append(pos)
+        self.A1 = torch.sparse_coo_tensor(
+            indices=torch.tensor([a1_rows, a1_cols], dtype=torch.long,
+                                 device=device),
+            values=torch.ones(dim * dim, dtype=torch.float64, device=device),
+            size=(dim, self.m)
+        ).coalesce()
+
+        a2_rows = [0] * dim
+        a2_cols = [i * (2 * dim - i + 1) // 2 for i in range(dim)]
+        self.a2 = torch.sparse_coo_tensor(
+            indices=torch.tensor([a2_rows, a2_cols], dtype=torch.long,
+                                 device=device),
+            values=torch.ones(dim, dtype=torch.float64, device=device),
+            size=(1, self.m)
+        ).coalesce()
+        self.A = torch.vstack((self.A1, self.a2)).coalesce()
 
         self.b = torch.zeros((dim + 1,), dtype=torch.float64, device=device)
         self.b[dim] = self.vol
 
         # Diagonal entries are allowed to be positive; off-diagonals must be <=0.
-        self.diag_mask = (a2_vec @ self.D).squeeze() != 0
+        self.diag_mask = torch.zeros(self.m, dtype=torch.bool, device=device)
+        self.diag_mask[self.a2.indices()[1]] = True
         self.off_mask = ~self.diag_mask
         self.off_positions = torch.where(self.off_mask)[0]
         self._off_positions_list = [int(p) for p in self.off_positions]
@@ -1363,17 +1377,77 @@ class LaplacianActiveSet:
                               + 2.0 * self.off_mask.to(torch.float64))
         self.P0_inv = beta / self.P_diag
 
+        # Precompute index structures for A * vector and A^T * vector.
+        self._diag_pos = torch.tensor(
+            [i * (2 * dim - i + 1) // 2 for i in range(dim)],
+            dtype=torch.long, device=device
+        )
+        self._row_pos = torch.zeros((dim, dim), dtype=torch.long,
+                                    device=device)
+        off_i, off_j, off_pos = [], [], []
+        for i in range(dim):
+            for j in range(i + 1, dim):
+                pos = i * dim + j - i * (i + 1) // 2
+                off_i.append(i)
+                off_j.append(j)
+                off_pos.append(pos)
+            for j in range(dim):
+                if j >= i:
+                    pos = i * dim + j - i * (i + 1) // 2
+                else:
+                    pos = j * dim + i - j * (j + 1) // 2
+                self._row_pos[i, j] = pos
+        self._off_i = torch.tensor(off_i, dtype=torch.long, device=device)
+        self._off_j = torch.tensor(off_j, dtype=torch.long, device=device)
+        self._off_pos = torch.tensor(off_pos, dtype=torch.long, device=device)
+
         # Precompute N^{-1} for the equality-only working set.
-        N_eq = (self.A * self.P0_inv.unsqueeze(0)) @ self.A.T
-        self._N_eq_inv = torch.from_numpy(
-            np.linalg.inv(N_eq.detach().cpu().numpy())
-        ).to(device=device, dtype=torch.float64)
+        self._N_eq_inv = self._build_N_eq_inv(dim, device)
 
         # Initial Laplacian.
         if L is not None:
             self.L = L.to(device=device, dtype=torch.float32)
         else:
             self.L = torch.eye(dim, device=device, dtype=torch.float32)
+
+    @staticmethod
+    def _build_N_eq_inv(dim: int, device: str) -> torch.Tensor:
+        """Inverse of N_eq = A P0^{-1} A^T (computed analytically)."""
+        N_eq = torch.full((dim + 1, dim + 1), 0.5,
+                          dtype=torch.float64, device=device)
+        N_eq[:dim, :dim] += (dim / 2.0) * torch.eye(dim, dtype=torch.float64,
+                                                    device=device)
+        N_eq[:dim, dim] = 1.0
+        N_eq[dim, :dim] = 1.0
+        N_eq[dim, dim] = float(dim)
+        return torch.from_numpy(
+            np.linalg.inv(N_eq.detach().cpu().numpy())
+        ).to(device=device, dtype=torch.float64)
+
+    def _A_mul_vec(self, vec: torch.Tensor) -> torch.Tensor:
+        """Compute A @ vec using the sparsity pattern of A."""
+        out = torch.zeros(self.dim + 1, dtype=torch.float64,
+                          device=self.device)
+        out[:self.dim] = vec[self._row_pos].sum(dim=1)
+        out[self.dim] = vec[self._diag_pos].sum()
+        return out
+
+    def _A_T_mul_vec(self, vec: torch.Tensor) -> torch.Tensor:
+        """Compute A^T @ vec using the sparsity pattern of A."""
+        out = torch.zeros(self.m, dtype=torch.float64, device=self.device)
+        out[self._off_pos] = vec[self._off_i] + vec[self._off_j]
+        out[self._diag_pos] = vec[:self.dim] + vec[self.dim]
+        return out
+
+    def _p1_for_edge(self, edge_idx: int) -> torch.Tensor:
+        """Column of A P0^{-1} corresponding to edge ``edge_idx``."""
+        pos = self._off_positions_list[edge_idx]
+        p1 = torch.zeros(self.dim + 1, dtype=torch.float64,
+                         device=self.device)
+        val = self.P0_inv[pos]
+        p1[self._off_i[edge_idx]] = val
+        p1[self._off_j[edge_idx]] = val
+        return p1
 
     def _add_edge(
         self,
@@ -1388,13 +1462,9 @@ class LaplacianActiveSet:
         dim = self.dim
         pos_new = self._off_positions_list[edge_idx]
 
-        a_new = torch.zeros(self.P0_inv.shape[0], dtype=torch.float64,
-                            device=self.device)
-        a_new[pos_new] = 1.0
-
         # p = M P0^{-1} a_new^T (only equality block is non-zero here because
         # the new edge is not yet in the working set).
-        p1 = (self.A * self.P0_inv.unsqueeze(0)) @ a_new
+        p1 = self._p1_for_edge(edge_idx)
         p2 = torch.zeros(len(W), dtype=torch.float64, device=self.device)
         p = torch.cat([p1, p2])
 
@@ -1420,11 +1490,11 @@ class LaplacianActiveSet:
         new_N_inv[m0, m0] = 1.0 / sigma
 
         # Update primal: l_new = l - scale * P0^{-1} * (a_new - M^T t).
-        bw_t = torch.zeros(self.P0_inv.shape[0], dtype=torch.float64,
-                           device=self.device)
+        bw_t = torch.zeros(self.m, dtype=torch.float64, device=self.device)
         for k, idx in enumerate(W):
             bw_t[self._off_positions_list[idx]] = t[dim + 1 + k]
-        correction = a_new - self.A.T @ t[:dim + 1] - bw_t
+        correction = -self._A_T_mul_vec(t[:dim + 1]) - bw_t
+        correction[pos_new] += 1.0
         l_new = l - scale * self.P0_inv * correction
 
         W.append(edge_idx)
@@ -1470,11 +1540,10 @@ class LaplacianActiveSet:
         W = W[:j] + W[j + 1:]
 
         # Recompute the primal from the reduced multipliers.
-        bw = torch.zeros(self.P0_inv.shape[0], dtype=torch.float64,
-                         device=self.device)
+        bw = torch.zeros(self.m, dtype=torch.float64, device=self.device)
         for k, idx in enumerate(W):
             bw[self._off_positions_list[idx]] = y[dim + 1 + k]
-        l = g - self.P0_inv * (self.A.T @ y[:dim + 1] + bw)
+        l = g - self.P0_inv * (self._A_T_mul_vec(y[:dim + 1]) + bw)
 
         return W, y, N_inv, l
 
@@ -1502,8 +1571,8 @@ class LaplacianActiveSet:
         g = self.P0_inv * q_norm
 
         # Equality-constrained minimizer.
-        y = self._N_eq_inv @ (self.A @ g - self.b)
-        l = g - self.P0_inv * (self.A.T @ y)
+        y = self._N_eq_inv @ (self._A_mul_vec(g) - self.b)
+        l = g - self.P0_inv * self._A_T_mul_vec(y)
 
         W = []
         N_inv = self._N_eq_inv.clone()

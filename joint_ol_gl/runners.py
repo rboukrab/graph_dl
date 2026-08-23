@@ -21,7 +21,6 @@ from tqdm import tqdm
 
 from joint_ol_gl.config import ensure_log_dir, gl_experiment_path
 from joint_ol_gl.datasets import FlankerDataset, PolyDataset, StatDataset
-from joint_ol_gl.graph_learn import LaplacianIPMSparse
 from joint_ol_gl.metrics import (
     compute_filterr_ggsr,
     compute_filterr_poly,
@@ -355,7 +354,7 @@ class SmoothRunner(GraphLearningRunner):
         parser.add_argument("--max_iter", type=int, default=1000)
 
     def setup(self) -> None:
-        from joint_ol_gl.graph_learn import ProjADMM2, LaplacianIPM, LaplacianActiveSet
+        from joint_ol_gl.graph_learn import ProjADMM2, LaplacianIPM, LaplacianIPMSparse, LaplacianActiveSet
 
         self.alpha = self.args.alpha
         self.beta = self.args.beta
