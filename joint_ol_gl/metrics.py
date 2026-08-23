@@ -138,6 +138,62 @@ def evaluate_adjacency(
         }
     return performance_metrics
 
+
+def evaluate_adjacency_weighted(
+        graph: Graph,
+        W: torch.FloatTensor,
+):
+    """Weighted (soft) precision/recall/F1 for a learned adjacency matrix.
+
+    Instead of binarizing the prediction with top-k thresholding, edge weights
+    contribute continuously to true/false positives/negatives. This yields a
+    metric that evolves smoothly as the solver refines edge weights.
+
+    Confusion counts are computed over the upper triangle (excluding diagonal).
+    Each ground-truth edge has weight 1, and each predicted edge contributes its
+    absolute weight. Recall is therefore the average predicted weight over true
+    edges, and precision is the fraction of total predicted weight that falls
+    on true edges.
+    """
+    performance_metrics = {}
+    if graph is not None:
+        W = np.asarray(W)
+        W_true = np.asarray(graph.W.todense())
+        n = W.shape[0]
+        iu = np.triu_indices(n, k=1)
+
+        scores = np.abs(W[iu])
+        true = (W_true[iu] != 0).astype(float)
+
+        tp = float((scores * true).sum())
+        fp = float((scores * (1.0 - true)).sum())
+        fn = float(((1.0 - scores) * true).sum())
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f_score = (
+            2.0 * precision * recall / (precision + recall)
+            if (precision + recall) > 0 else 0.0
+        )
+
+        nae = compute_nae(W, graph)
+        lap_sparsity = (W[np.abs(W) > 1e-2] != 0).sum() / 2
+
+        performance_metrics = {
+            'nae': nae, 'f1_score': f_score, 'precision': precision,
+            'recall': recall, 'sp': lap_sparsity,
+        }
+    return performance_metrics
+
+
+def evaluate_laplacian_weighted(
+        graph: Graph,
+        L: torch.FloatTensor,
+):
+    """Weighted (soft) metrics for a learned Laplacian matrix."""
+    W = laplacian_to_adj(L)
+    return evaluate_adjacency_weighted(graph, W)
+
 def compute_scores(W: torch.FloatTensor, graph: Graph, thresh: float = 0.5):
     """
     Compute true/false positives/negatives for a learned adjacency matrix.

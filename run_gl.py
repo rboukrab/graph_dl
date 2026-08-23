@@ -57,6 +57,14 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--dim", type=int, default=20, help="Graph dimension")
     parser.add_argument("--seed", type=int, default=1, help="Random seed")
+    parser.add_argument(
+        "--metric_mode",
+        type=str,
+        choices=["binary", "weighted"],
+        default="binary",
+        help="How to compute stat-set precision/recall/F1 "
+             "('binary' = top-k threshold, 'weighted' = soft weight-based)",
+    )
 
 
 def build_parser() -> Union[argparse.ArgumentParser, argparse.Namespace]:

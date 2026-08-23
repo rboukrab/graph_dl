@@ -22,6 +22,7 @@ def _make_args(algorithm: str, data_set: str = "stat", dim: int = 6,
         "test_interval": 2,
         "dim": dim,
         "seed": 0,
+        "metric_mode": "binary",
     }
     if algorithm == "glama":
         base.update({"rho": 1e-3, "gamma": 1e-3, "delta": 1e-1})

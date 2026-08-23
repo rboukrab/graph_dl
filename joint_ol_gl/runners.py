@@ -25,7 +25,9 @@ from joint_ol_gl.metrics import (
     compute_filterr_ggsr,
     compute_filterr_poly,
     evaluate_adjacency,
+    evaluate_adjacency_weighted,
     evaluate_laplacian,
+    evaluate_laplacian_weighted,
 )
 from joint_ol_gl.utils import (
     heavy_tailedness,
@@ -156,14 +158,19 @@ class GraphLearningRunner(ABC):
             self._compute_fmri_metrics(i_test, matrix)
 
     def _compute_stat_metrics(self, i_test: int, matrix: torch.Tensor) -> None:
+        metric_mode = getattr(self.args, "metric_mode", "binary")
         if self.uses_adjacency_for_stat():
-            metrics = evaluate_adjacency(self.graph, matrix.detach().clone().cpu().numpy())
-        else:
-            if not self.uses_adjacency_for_stat():
-                scale = np.linalg.norm(self.graph.L.todense()) / torch.norm(matrix)
-                metrics = evaluate_laplacian(self.graph, scale * matrix)
+            W = matrix.detach().clone().cpu().numpy()
+            if metric_mode == "weighted":
+                metrics = evaluate_adjacency_weighted(self.graph, W)
             else:
-                metrics = evaluate_adjacency(self.graph, matrix.detach().clone().cpu().numpy())
+                metrics = evaluate_adjacency(self.graph, W)
+        else:
+            scale = np.linalg.norm(self.graph.L.todense()) / torch.norm(matrix)
+            if metric_mode == "weighted":
+                metrics = evaluate_laplacian_weighted(self.graph, scale * matrix)
+            else:
+                metrics = evaluate_laplacian(self.graph, scale * matrix)
 
         for key in ("nae", "precision", "recall", "f1_score", "sp"):
             if key in metrics:
