@@ -57,6 +57,13 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
         default=10,
         help="Compute metrics every this many iterations",
     )
+    parser.add_argument(
+        "--metric_mode",
+        type=str,
+        choices=["binary", "weighted"],
+        default="binary",
+        help="How to compute stat-set precision/recall/F1",
+    )
 
 
 def _add_glama_args(parser: argparse.ArgumentParser) -> None:
@@ -206,6 +213,8 @@ def main() -> None:
         str(args.sim_time),
         "--test_interval",
         str(args.test_interval),
+        "--metric_mode",
+        str(args.metric_mode),
     ]
 
     if algorithm == "glama":
