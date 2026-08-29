@@ -126,8 +126,6 @@
                 "smooth",
                 "--data_set",
                 "smooth",
-                "--dim",
-                "20",
                 "--n_samples",
                 "10000",
                 "--alpha",
