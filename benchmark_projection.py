@@ -206,9 +206,13 @@ def main() -> None:
     parser.add_argument("--beta", type=float, default=10.0)
     parser.add_argument("--tol", type=float, default=1e-5)
     parser.add_argument("--max_iter", type=int, default=1000)
-    parser.add_argument("--n_reps", type=int, default=10)
+    parser.add_argument("--n_reps", type=int, default=3,
+                        help="Repetitions per seed (for timing stability)")
+    parser.add_argument("--n_runs", type=int, default=5,
+                        help="Number of different seeds (cases) to average over")
     parser.add_argument("--solvers", type=str, default="ipm,activeset,admm")
-    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=1,
+                        help="First random seed")
     parser.add_argument("--save", action="store_true", help="Save results to logs/")
     args = parser.parse_args()
 
@@ -218,73 +222,87 @@ def main() -> None:
     else:
         device = torch.device(device)
 
-    np.random.seed(args.seed)
-    torch.random.manual_seed(args.seed)
+    solver_names = [n.strip() for n in args.solvers.split(",") if n.strip() in SOLVERS]
+    if not solver_names:
+        raise ValueError(f"No known solvers selected: {args.solvers}")
 
-    print(f"Capturing H_k from SmoothRunner (dim={args.dim}, n_samples={args.n_samples}, "
-          f"alpha={args.alpha}, beta={args.beta})...")
-    H_k, vol, L0 = _capture_h_k(
-        dim=args.dim,
-        n_samples=args.n_samples,
-        alpha=args.alpha,
-        beta=args.beta,
-        device=device,
-        seed=args.seed,
-    )
-    print(f"H_k norm: {torch.norm(H_k).item():.4f}, vol: {vol:.4f}")
+    # Per-run raw results: solver -> list of metric dicts.
+    raw_results: Dict[str, List[Dict[str, float]]] = {name: [] for name in solver_names}
 
-    results: Dict[str, Dict[str, float]] = {}
-    for name in args.solvers.split(","):
-        name = name.strip()
-        if name not in SOLVERS:
-            print(f"Skipping unknown solver '{name}'")
-            continue
+    for run_idx in range(args.n_runs):
+        seed = args.seed + run_idx
+        np.random.seed(seed)
+        torch.random.manual_seed(seed)
 
-        cfg = SOLVERS[name]
-        solver_factory = lambda: cfg["class"](
+        print(f"\n=== Run {run_idx + 1}/{args.n_runs} (seed={seed}) ===")
+        H_k, vol, L0 = _capture_h_k(
             dim=args.dim,
-            L=L0,
-            vol=vol,
-            device=str(device),
-            **cfg["kwargs"],
-        )
-
-        print(f"\nBenchmarking {name}...")
-        results[name] = _benchmark_solver(
-            name=name,
-            solver_factory=solver_factory,
-            H=H_k,
-            vol=vol,
-            L0=L0,
-            tol=args.tol,
-            max_iter=args.max_iter,
-            n_reps=args.n_reps,
+            n_samples=args.n_samples,
+            alpha=args.alpha,
+            beta=args.beta,
             device=device,
+            seed=seed,
         )
+        print(f"H_k norm: {torch.norm(H_k).item():.4f}, vol: {vol:.4f}")
+
+        for name in solver_names:
+            cfg = SOLVERS[name]
+            solver_factory = lambda: cfg["class"](
+                dim=args.dim,
+                L=L0,
+                vol=vol,
+                device=str(device),
+                **cfg["kwargs"],
+            )
+
+            print(f"  Benchmarking {name}...")
+            metrics = _benchmark_solver(
+                name=name,
+                solver_factory=solver_factory,
+                H=H_k,
+                vol=vol,
+                L0=L0,
+                tol=args.tol,
+                max_iter=args.max_iter,
+                n_reps=args.n_reps,
+                device=device,
+            )
+            raw_results[name].append(metrics)
+
+    # Aggregate across runs.
+    aggregated: Dict[str, Dict[str, float]] = {}
+    for name, runs in raw_results.items():
+        agg = {}
+        for key in runs[0].keys():
+            values = np.array([r[key] for r in runs])
+            agg[f"{key}_mean"] = float(np.mean(values))
+            agg[f"{key}_std"] = float(np.std(values))
+        aggregated[name] = agg
 
     # Print summary table.
-    print("\n" + "=" * 90)
-    print(f"{'Solver':<12} {'time_ms':<18} {'iters':<8} {'obj':<12} {'row_err':<10} {'trace_err':<12} {'max_off':<10}")
-    print("=" * 90)
-    for name, m in results.items():
-        time_str = f"{m['time_mean_ms']:.2f} ± {m['time_std_ms']:.2f}"
-        print(f"{name:<12} {time_str:<18} {m['iters']:<8.0f} {m['objective']:<12.4f} "
-              f"{m['row_sum_max_abs']:<10.2e} {m['trace_err']:<12.2e} {m['max_off']:<10.2e}")
-    print("=" * 90)
+    print("\n" + "=" * 100)
+    print(f"{'Solver':<12} {'time_ms':<20} {'iters':<16} {'obj':<18} {'row_err':<12} {'trace_err':<14} {'max_off':<12}")
+    print("=" * 100)
+    for name, m in aggregated.items():
+        time_str = f"{m['time_mean_ms_mean']:.2f} ± {m['time_mean_ms_std']:.2f}"
+        iter_str = f"{m['iters_mean']:.1f} ± {m['iters_std']:.1f}"
+        obj_str = f"{m['objective_mean']:.4f} ± {m['objective_std']:.4f}"
+        print(f"{name:<12} {time_str:<20} {iter_str:<16} {obj_str:<18} "
+              f"{m['row_sum_max_abs_mean']:<12.2e} {m['trace_err_mean']:<14.2e} {m['max_off_mean']:<12.2e}")
+    print("=" * 100)
 
     if args.save:
         sim_path = os.path.join(
             "logs", "benchmark_projection",
-            f"dim{args.dim}_alpha{args.alpha:.0e}_beta{args.beta:.0e}_seed{args.seed}"
+            f"dim{args.dim}_alpha{args.alpha:.0e}_beta{args.beta:.0e}_seeds{args.seed}-{args.seed + args.n_runs - 1}"
         )
         ensure_log_dir(sim_path)
         out_file = os.path.join(sim_path, "results.json")
         with open(out_file, "w") as f:
             json.dump({
                 "args": vars(args),
-                "H_k_norm": float(torch.norm(H_k).cpu()),
-                "vol": vol,
-                "results": results,
+                "aggregated": aggregated,
+                "raw_results": raw_results,
             }, f, indent=2)
         print(f"\nResults saved to {out_file}")
 
