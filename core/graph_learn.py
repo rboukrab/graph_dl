@@ -856,6 +856,7 @@ class ProjADMM2:
         q = self.M_dup.T @ f_t
 
         # Projection step
+        self.iter = 0
         if self.mode == 'normal':
             for _ in range(max_iter):
                 l_old = self.l.detach().clone()
@@ -869,6 +870,7 @@ class ProjADMM2:
                 self.z[self.idx_off] = torch.minimum(w[self.idx_off], torch.tensor(0.))
                 self.v += self.z - self.l
                 err = torch.linalg.norm(self.l - l_old) / self.l.shape[0]
+                self.iter = _ + 1
                 if err < tolerance:
                     break
 
@@ -887,6 +889,7 @@ class ProjADMM2:
                 self.z[self.idx_off] = torch.minimum(w[self.idx_off], torch.tensor(0.))
                 self.v += self.z - self.l
                 err = torch.linalg.norm(self.l - l_old) / self.l.shape[0]
+                self.iter = _ + 1
                 if err < tolerance:
                     break
 
@@ -1015,7 +1018,9 @@ class LaplacianIPM:
         t = float(self.t)
         eps_out = max(tolerance, self.eps_out)
 
+        self.iter = 0
         for _ in range(max_iter):
+            self.iter = _ + 1
             if self.D_minus / t <= eps_out:
                 break
 
@@ -1240,7 +1245,9 @@ class LaplacianIPMSparse:
         t = float(self.t)
         eps_out = max(tolerance, self.eps_out)
 
+        self.iter = 0
         for _ in range(max_iter):
+            self.iter = _ + 1
             if self.D_minus / t <= eps_out:
                 break
 
@@ -1599,8 +1606,10 @@ class LaplacianActiveSet:
 
         W = []
         N_inv = self._N_eq_inv.clone()
+        self.iter = 0
 
         for _ in range(max_iter):
+            self.iter = _ + 1
             off_vals = l[self.off_positions]
 
             # Add the most violated off-diagonal not yet in the working set.

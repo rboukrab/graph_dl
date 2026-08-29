@@ -1,0 +1,293 @@
+"""Benchmark Laplacian projection solvers on a realistic H_k from SmoothRunner.
+
+Compares LaplacianIPMSparse, LaplacianActiveSet, and ProjADMM2 in terms of
+wall time, inner iterations, solution quality, and memory usage.
+
+Example
+-------
+python benchmark_projection.py --dim 20 --n_samples 100000 --alpha 1e-2 --beta 10 --n_reps 10
+"""
+
+import argparse
+import gc
+import json
+import os
+import time
+import tracemalloc
+import sys
+from types import SimpleNamespace
+from typing import Dict, List
+
+import numpy as np
+import torch
+
+from core.config import ensure_log_dir
+from core.datasets import StatDataset
+from core.graph_learn import LaplacianActiveSet, LaplacianIPMSparse, ProjADMM2
+from core.runners import SmoothRunner
+
+
+# Solvers to benchmark, with constructor flags and forward-call wrappers to
+# paper over their slightly different APIs.
+SOLVERS = {
+    "ipm": {
+        "class": LaplacianIPMSparse,
+        "kwargs": {"eps_in": 1e-3, "eps_out": 1e-3, "max_inner_iter": 100, "t0": 1.0},
+        "call": lambda solver, H, tol, max_iter: solver.forward(H, tolerance=tol, max_iter=max_iter),
+        "iters": lambda solver: int(getattr(solver, "iter", -1)),
+    },
+    "activeset": {
+        "class": LaplacianActiveSet,
+        "kwargs": {},
+        "call": lambda solver, H, tol, max_iter: solver.forward(H, max_iter=max_iter, tolerance=tol),
+        "iters": lambda solver: int(getattr(solver, "iter", -1)),
+    },
+    "admm": {
+        "class": ProjADMM2,
+        "kwargs": {"mode": "optimized"},
+        "call": lambda solver, H, tol, max_iter: solver.forward(H, tolerance=tol, max_iter=max_iter),
+        "iters": lambda solver: int(getattr(solver, "iter", -1)),
+    },
+}
+
+
+def _capture_h_k(
+    dim: int,
+    n_samples: int,
+    alpha: float,
+    beta: float,
+    device: torch.device,
+    seed: int = 1,
+):
+    """Run SmoothRunner for one iteration and return the H_k passed to the inner solver.
+
+    At iteration 0 the initial Laplacian is the identity, so the captured H_k
+    is independent of the chosen inner solver.
+    """
+    args = SimpleNamespace(
+        algorithm="smooth",
+        data_set="stat",
+        device=str(device),
+        n_samples=n_samples,
+        n_iters=1,
+        sim_time=9999999.0,
+        test_interval=1,
+        dim=dim,
+        seed=seed,
+        solver="activeset",
+        admm_mode="optimized",
+        alpha=alpha,
+        beta=beta,
+        tol=1e-5,
+        max_iter=1000,
+        metric_mode="binary",
+    )
+    dataset = StatDataset(seed, dim, n_samples)
+    runner = SmoothRunner(args, dataset, device)
+    runner.setup()
+
+    # Reproduce the H_k computation from SmoothRunner.step before the projection.
+    L = runner.graph_learner.L.detach().clone()
+    Y_train = runner.X_train @ torch.linalg.inv(
+        torch.eye(dim, device=device) + alpha * L
+    )
+    C = Y_train.T @ Y_train
+    H_k = -alpha * C / beta
+
+    graph_vol = float(runner.graph.W.todense().sum())
+    return H_k, graph_vol, L
+
+
+def _constraint_metrics(L: torch.Tensor, vol: float) -> Dict[str, float]:
+    """Compute Laplacian constraint violations and objective helpers."""
+    n = L.shape[0]
+    eye = torch.eye(n, device=L.device, dtype=L.dtype)
+    off = L[eye == 0]
+    diag = L[eye == 1]
+    return {
+        "row_sum_max_abs": float(torch.abs(L.sum(dim=1)).max().cpu()),
+        "trace_err": float(abs(L.trace().item() - vol)),
+        "max_off": float(off.max().cpu()),
+        "min_off": float(off.min().cpu()),
+        "mean_diag": float(diag.mean().cpu()),
+        "n_edges": int((off.abs() > 1e-6).sum().cpu()) // 2,
+    }
+
+
+def _objective(L: torch.Tensor, H: torch.Tensor) -> float:
+    return float((0.5 * torch.norm(L - H) ** 2).cpu())
+
+
+def _benchmark_solver(
+    name: str,
+    solver_factory,
+    H: torch.Tensor,
+    vol: float,
+    L0: torch.Tensor,
+    tol: float,
+    max_iter: int,
+    n_reps: int,
+    device: torch.device,
+) -> Dict[str, float]:
+    """Run warm-up + timed repetitions for one solver."""
+    call = SOLVERS[name]["call"]
+    iters_fn = SOLVERS[name]["iters"]
+
+    # Warm-up (not timed).
+    solver = solver_factory()
+    call(solver, H, tol, max_iter)
+    del solver
+    gc.collect()
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+
+    times_ms: List[float] = []
+    mem_deltas_kb: List[float] = []
+    objectives: List[float] = []
+
+    for _ in range(n_reps):
+        solver = solver_factory()
+
+        # Memory snapshot before solve.
+        tracemalloc.start()
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
+
+        if device.type == "cuda":
+            torch.cuda.synchronize()
+        t0 = time.perf_counter()
+        call(solver, H, tol, max_iter)
+        if device.type == "cuda":
+            torch.cuda.synchronize()
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        mem_deltas_kb.append((peak - current) / 1024.0)
+
+        times_ms.append(elapsed_ms)
+        objectives.append(_objective(solver.L, H))
+
+        del solver
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+
+    # Final quality run to report constraint metrics and iteration count.
+    solver = solver_factory()
+    call(solver, H, tol, max_iter)
+    metrics = _constraint_metrics(solver.L, vol)
+    metrics["objective"] = _objective(solver.L, H)
+    metrics["iters"] = iters_fn(solver)
+    metrics["time_mean_ms"] = float(np.mean(times_ms))
+    metrics["time_std_ms"] = float(np.std(times_ms))
+    metrics["time_min_ms"] = float(np.min(times_ms))
+    metrics["time_max_ms"] = float(np.max(times_ms))
+    metrics["mem_delta_kb_mean"] = float(np.mean(mem_deltas_kb))
+    metrics["objective_std"] = float(np.std(objectives))
+
+    if device.type == "cuda":
+        metrics["peak_gpu_mb"] = float(torch.cuda.max_memory_allocated(device)) / (1024.0 ** 2)
+
+    del solver
+    return metrics
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Benchmark Laplacian projection solvers on a real H_k"
+    )
+    parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--dim", type=int, default=20)
+    parser.add_argument("--n_samples", type=int, default=100_000)
+    parser.add_argument("--alpha", type=float, default=1e-2)
+    parser.add_argument("--beta", type=float, default=10.0)
+    parser.add_argument("--tol", type=float, default=1e-5)
+    parser.add_argument("--max_iter", type=int, default=1000)
+    parser.add_argument("--n_reps", type=int, default=10)
+    parser.add_argument("--solvers", type=str, default="ipm,activeset,admm")
+    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--save", action="store_true", help="Save results to logs/")
+    args = parser.parse_args()
+
+    device = args.device
+    if device is None:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(device)
+
+    np.random.seed(args.seed)
+    torch.random.manual_seed(args.seed)
+
+    print(f"Capturing H_k from SmoothRunner (dim={args.dim}, n_samples={args.n_samples}, "
+          f"alpha={args.alpha}, beta={args.beta})...")
+    H_k, vol, L0 = _capture_h_k(
+        dim=args.dim,
+        n_samples=args.n_samples,
+        alpha=args.alpha,
+        beta=args.beta,
+        device=device,
+        seed=args.seed,
+    )
+    print(f"H_k norm: {torch.norm(H_k).item():.4f}, vol: {vol:.4f}")
+
+    results: Dict[str, Dict[str, float]] = {}
+    for name in args.solvers.split(","):
+        name = name.strip()
+        if name not in SOLVERS:
+            print(f"Skipping unknown solver '{name}'")
+            continue
+
+        cfg = SOLVERS[name]
+        solver_factory = lambda: cfg["class"](
+            dim=args.dim,
+            L=L0,
+            vol=vol,
+            device=str(device),
+            **cfg["kwargs"],
+        )
+
+        print(f"\nBenchmarking {name}...")
+        results[name] = _benchmark_solver(
+            name=name,
+            solver_factory=solver_factory,
+            H=H_k,
+            vol=vol,
+            L0=L0,
+            tol=args.tol,
+            max_iter=args.max_iter,
+            n_reps=args.n_reps,
+            device=device,
+        )
+
+    # Print summary table.
+    print("\n" + "=" * 90)
+    print(f"{'Solver':<12} {'time_ms':<18} {'iters':<8} {'obj':<12} {'row_err':<10} {'trace_err':<12} {'max_off':<10}")
+    print("=" * 90)
+    for name, m in results.items():
+        time_str = f"{m['time_mean_ms']:.2f} ± {m['time_std_ms']:.2f}"
+        print(f"{name:<12} {time_str:<18} {m['iters']:<8.0f} {m['objective']:<12.4f} "
+              f"{m['row_sum_max_abs']:<10.2e} {m['trace_err']:<12.2e} {m['max_off']:<10.2e}")
+    print("=" * 90)
+
+    if args.save:
+        sim_path = os.path.join(
+            "logs", "benchmark_projection",
+            f"dim{args.dim}_alpha{args.alpha:.0e}_beta{args.beta:.0e}_seed{args.seed}"
+        )
+        ensure_log_dir(sim_path)
+        out_file = os.path.join(sim_path, "results.json")
+        with open(out_file, "w") as f:
+            json.dump({
+                "args": vars(args),
+                "H_k_norm": float(torch.norm(H_k).cpu()),
+                "vol": vol,
+                "results": results,
+            }, f, indent=2)
+        print(f"\nResults saved to {out_file}")
+
+
+if __name__ == "__main__":
+    main()
