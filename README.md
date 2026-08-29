@@ -55,7 +55,7 @@ Source code lives under the `core/` package:
 |--------|---------|
 | `core/graph_learn.py` | Graph-learning solvers: `BCD`, `GAMA`, `GLAMA`, `HomogeneousSelfDualEmbedding`, `StationaryADMM`, `ProjADMM`, `ProjADMM2`. |
 | `core/models.py` | Dictionary-learning/network classes: `LapRegSparseNet`, `StationarySparseNet`, `HeatDiffSparseNet`, `ApproximateKSVD`. |
-| `core/datasets.py` | PyTorch datasets: `StatDataset`, `PolyDataset`, `FlankerDataset`, `SmoothDictDataset`. |
+| `core/datasets.py` | PyTorch datasets: `StatDataset`, `PolyDataset`, `FlankerDataset`, `SmoothDictDataset`, `SmoothDataset`. |
 | `core/metrics.py` | Evaluation metrics: MSE, cosine similarity, NAE, F1/precision/recall, Laplacian evaluation, filter error. |
 | `core/sparse_coding.py` | Sparse coding algorithms: `_ISTA` and `_AIHT`. |
 | `core/utils.py` | Helpers: parameter printer, `bcd_glasso`, duplication matrix, graph generators, matching, small-world/modularity utilities. |

@@ -20,7 +20,7 @@ from sklearn.cluster import SpectralClustering
 from tqdm import tqdm
 
 from core.config import ensure_log_dir, gl_experiment_path
-from core.datasets import FlankerDataset, PolyDataset, StatDataset
+from core.datasets import FlankerDataset, PolyDataset, SmoothDataset, StatDataset
 from core.metrics import (
     compute_filterr_ggsr,
     compute_filterr_poly,
@@ -136,7 +136,7 @@ class GraphLearningRunner(ABC):
             "sp": np.zeros(n_metric_steps, dtype=float),
             "accum_time": np.zeros(n_metric_steps, dtype=float),
         }
-        if self.data_set == "stat":
+        if self.data_set in ("stat", "smooth"):
             self.metrics["nae"] = np.zeros(n_metric_steps, dtype=float)
             self.metrics["precision"] = np.zeros(n_metric_steps, dtype=float)
             self.metrics["recall"] = np.zeros(n_metric_steps, dtype=float)
@@ -152,7 +152,7 @@ class GraphLearningRunner(ABC):
         self.metrics["accum_time"][i_test] = self.accum_time_i
         matrix = self.get_graph_matrix()
 
-        if self.data_set == "stat":
+        if self.data_set in ("stat", "smooth"):
             self._compute_stat_metrics(i_test, matrix)
         elif self.data_set == "fmri":
             self._compute_fmri_metrics(i_test, matrix)
@@ -359,6 +359,10 @@ class SmoothRunner(GraphLearningRunner):
         parser.add_argument("--beta", type=float, default=100)
         parser.add_argument("--tol", type=float, default=1e-5)
         parser.add_argument("--max_iter", type=int, default=1000)
+        parser.add_argument("--k_nn", type=int, default=5,
+                            help="Number of nearest neighbours for --data_set smooth")
+        parser.add_argument("--sigma2", type=float, default=0.0,
+                            help="Noise power for --data_set smooth")
 
     def setup(self) -> None:
         from core.graph_learn import ProjADMM2, LaplacianIPM, LaplacianIPMSparse, LaplacianActiveSet
@@ -372,7 +376,7 @@ class SmoothRunner(GraphLearningRunner):
             "alpha", self.alpha, "beta", self.beta
         )
 
-        if self.data_set == "stat":
+        if self.data_set in ("stat", "smooth"):
             graph_vol = self.graph.W.todense().sum()
         else:
             graph_vol = 100.0
@@ -775,5 +779,13 @@ def load_dataset(args: Any) -> Any:
     elif args.data_set == "fmri":
         dataset = FlankerDataset()
         return dataset
+    elif args.data_set == "smooth":
+        return SmoothDataset(
+            args.seed,
+            args.dim,
+            int(args.n_samples),
+            k=getattr(args, "k_nn", 5),
+            sigma2=getattr(args, "sigma2", 0.0),
+        )
     else:
         raise ValueError(f"Unknown data_set: {args.data_set}")

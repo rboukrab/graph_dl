@@ -172,3 +172,85 @@ class SmoothDictDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return self.n_samples
+
+
+class SmoothDataset(torch.utils.data.Dataset):
+    r"""Dataset of smooth graph signals.
+
+    Generates a synthetic random geometric graph (same style as ``StatDataset``),
+    computes its combinatorial Laplacian ``L``, and draws samples from
+
+        x ~ N(ux, L^\dagger + sigma2 * I_n)
+
+    where ``L^\dagger`` is the Laplacian pseudoinverse and ``sigma2`` is the
+    noise power.
+
+    Parameters
+    ----------
+    seed : int
+        Random seed for reproducibility.
+    dim : int
+        Number of graph nodes.
+    n : int
+        Number of signal samples.
+    k : int, optional
+        Number of nearest neighbours used to build the graph (default 5).
+    sigma2 : float, optional
+        Noise power added to the diagonal of the covariance (default 0.0).
+    ux : array-like or None, optional
+        Mean vector. If None, a zero-mean vector is used.
+    """
+
+    def __init__(
+        self,
+        seed: int,
+        dim: int,
+        n: int,
+        k: int = 5,
+        sigma2: float = 0.0,
+        ux=None,
+    ):
+        super(SmoothDataset).__init__()
+
+        np.random.seed(seed)
+
+        # Random geometric graph, same construction as StatDataset.
+        coord = np.sqrt(5) * np.random.rand(dim, 2)
+        graph = NNGraph(coord, k=k)
+        graph.W[graph.W != 0] = 1
+        graph = Graph(graph.W, coords=coord)
+        graph.compute_laplacian()
+
+        L = np.asarray(graph.L.todense() if hasattr(graph.L, "todense") else graph.L)
+        L = L.astype(float)
+
+        # Laplacian pseudoinverse via eigen-decomposition for numerical stability.
+        eigvals, eigvecs = np.linalg.eigh(L)
+        inv_eigvals = np.where(np.abs(eigvals) > 1e-10, 1.0 / eigvals, 0.0)
+        L_pinv = eigvecs @ np.diag(inv_eigvals) @ eigvecs.T
+
+        # Covariance: L^\dagger + sigma2 * I.
+        cov = L_pinv + float(sigma2) * np.eye(dim)
+        cov = (cov + cov.T) / 2.0  # enforce exact symmetry
+
+        # Mean vector.
+        if ux is None:
+            mean = np.zeros(dim)
+        else:
+            mean = np.asarray(ux, dtype=float)
+            if mean.shape != (dim,):
+                raise ValueError(f"ux must have shape ({dim},), got {mean.shape}")
+
+        X = np.random.multivariate_normal(mean, cov, size=n)
+
+        self.graph = graph
+        self.X = torch.from_numpy(X).float()
+        self.L = torch.from_numpy(L).float()
+        self.sigma2 = float(sigma2)
+        self.mean = torch.from_numpy(mean).float()
+
+    def __getitem__(self, index):
+        return self.X[index]
+
+    def __len__(self):
+        return self.X.shape[0]

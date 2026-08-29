@@ -30,7 +30,7 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--data_set",
         type=str,
-        choices=["stat", "fmri"],
+        choices=["stat", "fmri", "smooth"],
         default="fmri",
         help="Dataset to use",
     )
