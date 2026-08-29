@@ -1,11 +1,14 @@
-"""Benchmark Laplacian projection solvers on a realistic H_k from SmoothRunner.
+"""Benchmark Laplacian projection solvers on a realistic H_k.
 
-Compares LaplacianIPMSparse, LaplacianActiveSet, and ProjADMM2 in terms of
-wall time, inner iterations, solution quality, and memory usage.
+The benchmark can build the projection matrix H_k from either the new smooth
+graph-signal dataset (:class:`core.datasets.SmoothDataset`) or the classic
+stationary dataset (:class:`core.datasets.StatDataset`). It then compares
+LaplacianIPMSparse, LaplacianActiveSet, and ProjADMM2 in terms of wall time,
+inner iterations, solution quality, and memory usage.
 
 Example
 -------
-python benchmark_projection.py --dim 20 --n_samples 100000 --alpha 1e-2 --beta 10 --n_reps 10
+python benchmark_projection.py --data_set smooth --dim 20 --n_samples 100000 --alpha 1e-2 --beta 10 --n_reps 10
 """
 
 import argparse
@@ -15,16 +18,14 @@ import os
 import time
 import tracemalloc
 import sys
-from types import SimpleNamespace
 from typing import Dict, List
 
 import numpy as np
 import torch
 
 from core.config import ensure_log_dir
-from core.datasets import StatDataset
+from core.datasets import SmoothDataset, StatDataset
 from core.graph_learn import LaplacianActiveSet, LaplacianIPMSparse, ProjADMM2
-from core.runners import SmoothRunner
 
 
 # Solvers to benchmark, with constructor flags and forward-call wrappers to
@@ -58,44 +59,33 @@ def _capture_h_k(
     beta: float,
     device: torch.device,
     seed: int = 1,
+    data_set: str = "smooth",
+    k_nn: int = 5,
+    sigma2: float = 0.0,
 ):
-    """Run SmoothRunner for one iteration and return the H_k passed to the inner solver.
+    """Build the projection input H_k directly from a dataset.
 
-    At iteration 0 the initial Laplacian is the identity, so the captured H_k
-    is independent of the chosen inner solver.
+    We mimic the first iteration of :class:`core.runners.SmoothRunner`: the
+    inner solver is initialized with the identity Laplacian, so the captured
+    ``H_k = -alpha/beta * C`` is independent of the chosen projection solver.
     """
-    args = SimpleNamespace(
-        algorithm="smooth",
-        data_set="stat",
-        device=str(device),
-        n_samples=n_samples,
-        n_iters=1,
-        sim_time=9999999.0,
-        test_interval=1,
-        dim=dim,
-        seed=seed,
-        solver="activeset",
-        admm_mode="optimized",
-        alpha=alpha,
-        beta=beta,
-        tol=1e-5,
-        max_iter=1000,
-        metric_mode="binary",
-    )
-    dataset = StatDataset(seed, dim, n_samples)
-    runner = SmoothRunner(args, dataset, device)
-    runner.setup()
+    if data_set == "smooth":
+        dataset = SmoothDataset(seed, dim, n_samples, k=k_nn, sigma2=sigma2)
+    elif data_set == "stat":
+        dataset = StatDataset(seed, dim, n_samples)
+    else:
+        raise ValueError(f"Unsupported data_set for benchmark: {data_set}")
 
-    # Reproduce the H_k computation from SmoothRunner.step before the projection.
-    L = runner.graph_learner.L.detach().clone()
-    Y_train = runner.X_train @ torch.linalg.inv(
-        torch.eye(dim, device=device) + alpha * L
-    )
+    X_train = dataset.X.to(device)
+    graph_vol = float(dataset.graph.W.todense().sum())
+
+    # Initial Laplacian used by SmoothRunner before the first projection.
+    L0 = torch.eye(dim, device=device)
+    Y_train = X_train @ torch.linalg.inv(torch.eye(dim, device=device) + alpha * L0)
     C = Y_train.T @ Y_train
     H_k = -alpha * C / beta
 
-    graph_vol = float(runner.graph.W.todense().sum())
-    return H_k, graph_vol, L
+    return H_k, graph_vol, L0
 
 
 def _constraint_metrics(L: torch.Tensor, vol: float) -> Dict[str, float]:
@@ -200,6 +190,9 @@ def main() -> None:
         description="Benchmark Laplacian projection solvers on a real H_k"
     )
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--data_set", type=str, default="smooth",
+                        choices=["stat", "smooth"],
+                        help="Dataset used to build H_k")
     parser.add_argument("--dim", type=int, default=20)
     parser.add_argument("--n_samples", type=int, default=100_000)
     parser.add_argument("--alpha", type=float, default=1e-2)
@@ -213,6 +206,10 @@ def main() -> None:
     parser.add_argument("--solvers", type=str, default="ipm,activeset,admm")
     parser.add_argument("--seed", type=int, default=1,
                         help="First random seed")
+    parser.add_argument("--k_nn", type=int, default=5,
+                        help="Number of nearest neighbours for --data_set smooth")
+    parser.add_argument("--sigma2", type=float, default=0.0,
+                        help="Noise power for --data_set smooth")
     parser.add_argument("--save", action="store_true", help="Save results to logs/")
     args = parser.parse_args()
 
@@ -242,6 +239,9 @@ def main() -> None:
             beta=args.beta,
             device=device,
             seed=seed,
+            data_set=args.data_set,
+            k_nn=args.k_nn,
+            sigma2=args.sigma2,
         )
         print(f"H_k norm: {torch.norm(H_k).item():.4f}, vol: {vol:.4f}")
 
