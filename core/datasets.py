@@ -4,8 +4,10 @@ import numpy as np
 import pandas as pd
 from os.path import join as pjoin
 from scipy.io import loadmat
-from pygsp.graphs import NNGraph, Graph
+from pygsp.graphs import Graph
 from pygsp.filters import Filter
+
+from core.graphs import random_geometric_graph
 from matplotlib import pyplot as plt
 
 class StatDataset(torch.utils.data.Dataset):
@@ -16,11 +18,8 @@ class StatDataset(torch.utils.data.Dataset):
         # Random number generator seed
         np.random.seed(seed)
 
-        # Generate precision matrix
-        coord = np.sqrt(5) * np.random.rand(dim, 2)
-        graph = NNGraph(coord, k=5)
-        graph.W[graph.W != 0] = 1
-        graph = Graph(graph.W, coords=coord)
+        # Generate graph
+        graph = random_geometric_graph(dim, seed, k=5)
 
         h = np.random.rand(deg+1)
         h[0] = 1.
@@ -215,10 +214,7 @@ class SmoothDataset(torch.utils.data.Dataset):
         np.random.seed(seed)
 
         # Random geometric graph, same construction as StatDataset.
-        coord = np.sqrt(5) * np.random.rand(dim, 2)
-        graph = NNGraph(coord, k=k)
-        graph.W[graph.W != 0] = 1
-        graph = Graph(graph.W, coords=coord)
+        graph = random_geometric_graph(dim, seed, k=k)
         graph.compute_laplacian()
 
         L = np.asarray(graph.L.todense() if hasattr(graph.L, "todense") else graph.L)
