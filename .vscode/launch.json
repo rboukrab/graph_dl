@@ -504,28 +504,28 @@
             "justMyCode": false
         },
         {
-            "name": "plot_grid_search.py",
+            "name": "plot/plot_grid_search.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/plot_grid_search.py",
+            "program": "${workspaceFolder}/plot/plot_grid_search.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "justMyCode": false
         },
         {
-            "name": "plot_learning_curves.py",
+            "name": "plot/plot_learning_curves.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/plot_learning_curves.py",
+            "program": "${workspaceFolder}/plot/plot_learning_curves.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "justMyCode": false
         },
         {
-            "name": "plot_var_n_samples.py",
+            "name": "plot/plot_var_n_samples.py",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/plot_var_n_samples.py",
+            "program": "${workspaceFolder}/plot/plot_var_n_samples.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "justMyCode": false

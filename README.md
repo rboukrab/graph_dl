@@ -150,9 +150,9 @@ python benchmark_l_update.py --dim 100 --deg 2 --alpha 4 \
 
 | Script | Input | Output |
 |--------|-------|--------|
-| `plot_grid_search.py` | `logs/gl_<method>/...` | Heatmaps of NAE, F-score, sparsity, etc. |
-| `plot_learning_curves.py` | `logs/gl_<method>_curve/...` | Metric-vs-time curves comparing methods. |
-| `plot_var_n_samples.py` | `logs/var_<method>/...` | Metric-vs-`N` curves. |
+| `plot/plot_grid_search.py` | `logs/gl_<method>/...` | Heatmaps of NAE, F-score, sparsity, etc. |
+| `plot/plot_learning_curves.py` | `logs/gl_<method>_curve/...` | Metric-vs-time curves comparing methods. |
+| `plot/plot_var_n_samples.py` | `logs/var_<method>/...` | Metric-vs-`N` curves. |
 | `other/*.py` | Various | Auxiliary figure-generation scripts. |
 
 Plotting scripts use `matplotlib` with LaTeX text rendering (`text.usetex: True`) and require a working LaTeX installation or will fall back with warnings.
