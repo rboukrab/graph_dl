@@ -3,6 +3,7 @@
 Examples
 --------
 python grid_search_gl.py --algorithm glama --data_set stat
+python grid_search_gl.py --algorithm smooth --data_set smooth
 python grid_search_gl.py --algorithm smooth --data_set fmri
 python grid_search_gl.py --algorithm poly --data_set stat
 python grid_search_gl.py --algorithm pgl --data_set stat
@@ -28,7 +29,7 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--data_set",
         type=str,
-        choices=["stat", "fmri"],
+        choices=["stat", "fmri", "smooth"],
         default="fmri",
         help="Dataset to use",
     )
@@ -95,6 +96,14 @@ def _add_smooth_args(parser: argparse.ArgumentParser) -> None:
         help="log10(max beta)"
     )
     parser.add_argument("--n_beta", type=int, default=1, help="Number of beta values")
+    parser.add_argument(
+        "--k_nn", type=int, default=5,
+        help="Number of nearest neighbours for --data_set smooth"
+    )
+    parser.add_argument(
+        "--sigma2", type=float, default=0.0,
+        help="Noise power for --data_set smooth"
+    )
 
 
 def _add_poly_args(parser: argparse.ArgumentParser) -> None:
@@ -204,6 +213,10 @@ def main() -> None:
         ys = np.logspace(args.min_beta_exp, args.max_beta_exp, args.n_beta)
         x_name, y_name = "--alpha", "--beta"
         seeds = range(1, 2)
+        base_cmd.extend([
+            "--k_nn", str(args.k_nn),
+            "--sigma2", str(args.sigma2),
+        ])
     elif algorithm == "poly":
         xs = np.arange(args.min_deg, args.max_deg + 1)
         ys = np.logspace(args.min_alpha_exp, args.max_alpha_exp, args.n_alpha)

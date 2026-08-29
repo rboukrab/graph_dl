@@ -3,6 +3,7 @@
 Examples
 --------
 python run_gl.py --algorithm glama --data_set stat --dim 20 --n_iters 100
+python run_gl.py --algorithm smooth --data_set smooth --dim 20 --n_samples 10000 --alpha 1e-2 --beta 10
 python run_gl.py --algorithm smooth --data_set fmri --alpha 1e-2 --beta 0.3
 python run_gl.py --algorithm poly --deg 2 --alpha 4
 python run_gl.py --algorithm pgl --rho 0.1 --eta 1e-1
