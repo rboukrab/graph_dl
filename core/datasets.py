@@ -7,7 +7,7 @@ from scipy.io import loadmat
 from pygsp.graphs import Graph
 from pygsp.filters import Filter
 
-from core.graphs import random_geometric_graph
+from core.graphs import random_geometric_graph, rbf_graph
 from matplotlib import pyplot as plt
 
 class StatDataset(torch.utils.data.Dataset):
@@ -176,8 +176,9 @@ class SmoothDictDataset(torch.utils.data.Dataset):
 class SmoothDataset(torch.utils.data.Dataset):
     r"""Dataset of smooth graph signals.
 
-    Generates a synthetic random geometric graph (same style as ``StatDataset``),
-    computes its combinatorial Laplacian ``L``, and draws samples from
+    Generates a synthetic random geometric graph with Gaussian RBF edge weights
+    (as described in the paper), computes its combinatorial Laplacian ``L``,
+    and draws samples from
 
         x ~ N(ux, L^\dagger + sigma2 * I_n)
 
@@ -193,7 +194,8 @@ class SmoothDataset(torch.utils.data.Dataset):
     n : int
         Number of signal samples.
     k : int, optional
-        Number of nearest neighbours used to build the graph (default 5).
+        Kept for API compatibility; ignored by the RBF graph construction
+        (default 5).
     sigma2 : float, optional
         Noise power added to the diagonal of the covariance (default 0.0).
     ux : array-like or None, optional
@@ -213,8 +215,8 @@ class SmoothDataset(torch.utils.data.Dataset):
 
         np.random.seed(seed)
 
-        # Random geometric graph, same construction as StatDataset.
-        graph = random_geometric_graph(dim, seed, k=k)
+        # Random geometric graph with Gaussian RBF edge weights.
+        graph = rbf_graph(dim, seed)
         graph.compute_laplacian()
 
         L = np.asarray(graph.L.todense() if hasattr(graph.L, "todense") else graph.L)

@@ -123,8 +123,9 @@ def evaluate_adjacency(
 ):
     performance_metrics = {}
     if graph is not None:
-        num_nz = int(np.triu(graph.W.todense()).sum())
-        trueW = graph.W.todense().__array__().flatten().astype(int)
+        W_true = np.asarray(graph.W.todense())
+        num_nz = int((np.triu(W_true, k=1) != 0).sum())
+        trueW = (W_true != 0).astype(int).flatten()
         predW = top_k_from_adj(W, k=num_nz).flatten().astype(int)
         nae = compute_nae(W, graph)
         f_score = f1_score(trueW, predW)
