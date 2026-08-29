@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from pygsp.graphs import Graph
 
-from graph_dl.metrics import (
+from core.metrics import (
     laplacian_to_adj,
     top_k_from_adj,
     evaluate_adjacency,

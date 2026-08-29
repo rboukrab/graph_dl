@@ -19,9 +19,9 @@ import torch
 from sklearn.cluster import SpectralClustering
 from tqdm import tqdm
 
-from graph_dl.config import ensure_log_dir, gl_experiment_path
-from graph_dl.datasets import FlankerDataset, PolyDataset, StatDataset
-from graph_dl.metrics import (
+from core.config import ensure_log_dir, gl_experiment_path
+from core.datasets import FlankerDataset, PolyDataset, StatDataset
+from core.metrics import (
     compute_filterr_ggsr,
     compute_filterr_poly,
     evaluate_adjacency,
@@ -29,7 +29,7 @@ from graph_dl.metrics import (
     evaluate_laplacian,
     evaluate_laplacian_weighted,
 )
-from graph_dl.utils import (
+from core.utils import (
     heavy_tailedness,
     modularity,
     small_world_coefficient,
@@ -361,7 +361,7 @@ class SmoothRunner(GraphLearningRunner):
         parser.add_argument("--max_iter", type=int, default=1000)
 
     def setup(self) -> None:
-        from graph_dl.graph_learn import ProjADMM2, LaplacianIPM, LaplacianIPMSparse, LaplacianActiveSet
+        from core.graph_learn import ProjADMM2, LaplacianIPM, LaplacianIPMSparse, LaplacianActiveSet
 
         self.alpha = self.args.alpha
         self.beta = self.args.beta
@@ -454,7 +454,7 @@ class PolyRunner(GraphLearningRunner):
         return ["filterr"]
 
     def setup(self) -> None:
-        from graph_dl.graph_learn import ProjADMM2
+        from core.graph_learn import ProjADMM2
 
         self.deg = self.args.deg
         self.alpha = self.args.alpha
@@ -681,7 +681,7 @@ class PglRunner(GraphLearningRunner):
         L1 = 4 * beta * la_max ** 2
 
         if self.S.sum() == 0.0:
-            from graph_dl.utils import generate_graph_ER
+            from core.utils import generate_graph_ER
             self.S = torch.from_numpy(generate_graph_ER(self.dim, 0.1)).to(
                 self.device
             ).float()

@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from graph_dl.graph_learn import (
+from core.graph_learn import (
     BCD, GAMA, GLAMA, StationaryADMM, ProjADMM2, LaplacianIPM, LaplacianActiveSet,
 )
 from tests.conftest import cpu_lapack_available

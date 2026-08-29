@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from graph_dl.sparse_coding import _ISTA, _AIHT
+from core.sparse_coding import _ISTA, _AIHT
 from tests.conftest import cpu_lapack_available
 
 

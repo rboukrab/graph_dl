@@ -2,11 +2,11 @@ import os
 import time
 import argparse
 
-from graph_dl.config import benchmark_experiment_path, ensure_log_dir
+from core.config import benchmark_experiment_path, ensure_log_dir
 import torch
 import numpy as np
-from graph_dl.datasets import StatDataset
-from graph_dl.graph_learn import ProjADMM2
+from core.datasets import StatDataset
+from core.graph_learn import ProjADMM2
 from torch.nn.functional import softshrink
 
 # Training settings

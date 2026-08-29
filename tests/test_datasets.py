@@ -2,7 +2,7 @@
 
 import torch
 
-from graph_dl.datasets import StatDataset, FlankerDataset
+from core.datasets import StatDataset, FlankerDataset
 
 
 def test_stat_dataset_shape():

@@ -49,18 +49,18 @@ pip install -e ".[fmri]"
 
 ## Core package
 
-Source code lives under the `graph_dl/` package:
+Source code lives under the `core/` package:
 
 | Module | Purpose |
 |--------|---------|
-| `graph_dl/graph_learn.py` | Graph-learning solvers: `BCD`, `GAMA`, `GLAMA`, `HomogeneousSelfDualEmbedding`, `StationaryADMM`, `ProjADMM`, `ProjADMM2`. |
-| `graph_dl/models.py` | Dictionary-learning/network classes: `LapRegSparseNet`, `StationarySparseNet`, `HeatDiffSparseNet`, `ApproximateKSVD`. |
-| `graph_dl/datasets.py` | PyTorch datasets: `StatDataset`, `PolyDataset`, `FlankerDataset`, `SmoothDataset`. |
-| `graph_dl/metrics.py` | Evaluation metrics: MSE, cosine similarity, NAE, F1/precision/recall, Laplacian evaluation, filter error. |
-| `graph_dl/sparse_coding.py` | Sparse coding algorithms: `_ISTA` and `_AIHT`. |
-| `graph_dl/utils.py` | Helpers: parameter printer, `bcd_glasso`, duplication matrix, graph generators, matching, small-world/modularity utilities. |
-| `graph_dl/config.py` | Shared experiment-path builders and subprocess helpers. |
-| `graph_dl/runners.py` | Algorithm runner classes (`GlamaRunner`, `SmoothRunner`, `PolyRunner`, `PglRunner`). |
+| `core/graph_learn.py` | Graph-learning solvers: `BCD`, `GAMA`, `GLAMA`, `HomogeneousSelfDualEmbedding`, `StationaryADMM`, `ProjADMM`, `ProjADMM2`. |
+| `core/models.py` | Dictionary-learning/network classes: `LapRegSparseNet`, `StationarySparseNet`, `HeatDiffSparseNet`, `ApproximateKSVD`. |
+| `core/datasets.py` | PyTorch datasets: `StatDataset`, `PolyDataset`, `FlankerDataset`, `SmoothDataset`. |
+| `core/metrics.py` | Evaluation metrics: MSE, cosine similarity, NAE, F1/precision/recall, Laplacian evaluation, filter error. |
+| `core/sparse_coding.py` | Sparse coding algorithms: `_ISTA` and `_AIHT`. |
+| `core/utils.py` | Helpers: parameter printer, `bcd_glasso`, duplication matrix, graph generators, matching, small-world/modularity utilities. |
+| `core/config.py` | Shared experiment-path builders and subprocess helpers. |
+| `core/runners.py` | Algorithm runner classes (`GlamaRunner`, `SmoothRunner`, `PolyRunner`, `PglRunner`). |
 
 ---
 
@@ -103,7 +103,7 @@ Common arguments:
 
 Algorithm-specific arguments are added automatically; run `python run_gl.py --help` to see them.
 
-The actual algorithm logic lives in `graph_dl/runners.py` as `GlamaRunner`, `SmoothRunner`, `PolyRunner`, and `PglRunner`.
+The actual algorithm logic lives in `core/runners.py` as `GlamaRunner`, `SmoothRunner`, `PolyRunner`, and `PglRunner`.
 
 ---
 

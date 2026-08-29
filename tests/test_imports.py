@@ -2,17 +2,17 @@
 
 
 def test_package_imports():
-    import graph_dl
-    import graph_dl.datasets
-    import graph_dl.graph_learn
-    import graph_dl.metrics
-    import graph_dl.models
-    import graph_dl.sparse_coding
-    import graph_dl.utils
+    import core
+    import core.datasets
+    import core.graph_learn
+    import core.metrics
+    import core.models
+    import core.sparse_coding
+    import core.utils
 
 
 def test_graph_learn_classes_available():
-    from graph_dl.graph_learn import (
+    from core.graph_learn import (
         BCD, GAMA, GLAMA, HomogeneousSelfDualEmbedding,
         StationaryADMM, ProjADMM2, LaplacianIPM, LaplacianActiveSet,
     )

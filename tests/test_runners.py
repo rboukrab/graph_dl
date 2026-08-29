@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from graph_dl.datasets import FlankerDataset, StatDataset
-from graph_dl.runners import RUNNERS, load_dataset
+from core.datasets import FlankerDataset, StatDataset
+from core.runners import RUNNERS, load_dataset
 from tests.conftest import cpu_lapack_available
 
 

@@ -64,7 +64,7 @@ Homepage = "https://github.com/Rachid/graph_dl"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["graph_dl*"]
+include = ["core*"]
 exclude = ["tests*", "logs*", "results*", "data*", "img*"]
 
 [tool.pytest.ini_options]

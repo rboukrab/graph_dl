@@ -5,7 +5,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import splu
 from torch.autograd import Variable
 
-from graph_dl.utils import duplication_matrix
+from core.utils import duplication_matrix
 from torch.nn.functional import softshrink
 
 class BCD:
