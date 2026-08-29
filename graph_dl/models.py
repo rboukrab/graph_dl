@@ -1,8 +1,8 @@
 import pygsp
 import torch
 import torch.nn as nn
-from joint_ol_gl.graph_learn import BCD, GAMA, GLAMA
-from joint_ol_gl.sparse_coding import _AIHT
+from graph_dl.graph_learn import BCD, GAMA, GLAMA
+from graph_dl.sparse_coding import _AIHT
 from torch.nn.functional import softshrink
 
 class LapRegSparseNet(nn.Module):

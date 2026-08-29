@@ -2,17 +2,17 @@
 
 
 def test_package_imports():
-    import joint_ol_gl
-    import joint_ol_gl.datasets
-    import joint_ol_gl.graph_learn
-    import joint_ol_gl.metrics
-    import joint_ol_gl.models
-    import joint_ol_gl.sparse_coding
-    import joint_ol_gl.utils
+    import graph_dl
+    import graph_dl.datasets
+    import graph_dl.graph_learn
+    import graph_dl.metrics
+    import graph_dl.models
+    import graph_dl.sparse_coding
+    import graph_dl.utils
 
 
 def test_graph_learn_classes_available():
-    from joint_ol_gl.graph_learn import (
+    from graph_dl.graph_learn import (
         BCD, GAMA, GLAMA, HomogeneousSelfDualEmbedding,
         StationaryADMM, ProjADMM2, LaplacianIPM, LaplacianActiveSet,
     )

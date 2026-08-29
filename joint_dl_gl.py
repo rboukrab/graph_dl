@@ -2,17 +2,17 @@ import os
 import time
 import argparse
 
-from joint_ol_gl.config import joint_experiment_path, ensure_log_dir
+from graph_dl.config import joint_experiment_path, ensure_log_dir
 import torch
 import numpy as np
 from pygsp.graphs import Graph
 from tqdm import tqdm
 import networkx as nx
 
-from joint_ol_gl.models import LapRegSparseNet, StationarySparseNet, HeatDiffSparseNet
-from joint_ol_gl.datasets import StatDataset, FlankerDataset
-from joint_ol_gl.metrics import compute_mse, compute_nae, compute_scores
-from joint_ol_gl.graph_learn import BCD, GAMA, GLAMA, StationaryADMM
+from graph_dl.models import LapRegSparseNet, StationarySparseNet, HeatDiffSparseNet
+from graph_dl.datasets import StatDataset, FlankerDataset
+from graph_dl.metrics import compute_mse, compute_nae, compute_scores
+from graph_dl.graph_learn import BCD, GAMA, GLAMA, StationaryADMM
 
 # Training settings
 parser = argparse.ArgumentParser(

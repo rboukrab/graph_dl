@@ -1,1 +1,1 @@
-"""Tests for joint_ol_gl."""
+"""Tests for graph_dl."""

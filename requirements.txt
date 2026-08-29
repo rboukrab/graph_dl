@@ -1,4 +1,4 @@
-# Core dependencies for joint_ol_gl
+# Core dependencies for graph_dl
 # Install with: pip install -r requirements.txt
 # For development + all extras: pip install -e ".[all]"
 

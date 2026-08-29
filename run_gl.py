@@ -14,7 +14,7 @@ from typing import Union
 
 import torch
 
-from joint_ol_gl.runners import RUNNERS, load_dataset
+from graph_dl.runners import RUNNERS, load_dataset
 
 
 def _add_common_args(parser: argparse.ArgumentParser) -> None:

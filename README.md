@@ -1,4 +1,4 @@
-# joint_ol_gl — Online Graph Learning and Joint Dictionary Learning
+# graph_dl — Online Graph Learning and Joint Dictionary Learning
 
 This repository implements several online graph-learning algorithms and joint dictionary-learning/graph-learning methods in PyTorch. It is designed for experiments on synthetic Gaussian Markov random field (GMRF) / stationary graph signals (`stat`) and on a real fMRI emotion dataset (`fmri`).
 
@@ -49,18 +49,18 @@ pip install -e ".[fmri]"
 
 ## Core package
 
-Source code lives under the `joint_ol_gl/` package:
+Source code lives under the `graph_dl/` package:
 
 | Module | Purpose |
 |--------|---------|
-| `joint_ol_gl/graph_learn.py` | Graph-learning solvers: `BCD`, `GAMA`, `GLAMA`, `HomogeneousSelfDualEmbedding`, `StationaryADMM`, `ProjADMM`, `ProjADMM2`. |
-| `joint_ol_gl/models.py` | Dictionary-learning/network classes: `LapRegSparseNet`, `StationarySparseNet`, `HeatDiffSparseNet`, `ApproximateKSVD`. |
-| `joint_ol_gl/datasets.py` | PyTorch datasets: `StatDataset`, `PolyDataset`, `FlankerDataset`, `SmoothDataset`. |
-| `joint_ol_gl/metrics.py` | Evaluation metrics: MSE, cosine similarity, NAE, F1/precision/recall, Laplacian evaluation, filter error. |
-| `joint_ol_gl/sparse_coding.py` | Sparse coding algorithms: `_ISTA` and `_AIHT`. |
-| `joint_ol_gl/utils.py` | Helpers: parameter printer, `bcd_glasso`, duplication matrix, graph generators, matching, small-world/modularity utilities. |
-| `joint_ol_gl/config.py` | Shared experiment-path builders and subprocess helpers. |
-| `joint_ol_gl/runners.py` | Algorithm runner classes (`GlamaRunner`, `SmoothRunner`, `PolyRunner`, `PglRunner`). |
+| `graph_dl/graph_learn.py` | Graph-learning solvers: `BCD`, `GAMA`, `GLAMA`, `HomogeneousSelfDualEmbedding`, `StationaryADMM`, `ProjADMM`, `ProjADMM2`. |
+| `graph_dl/models.py` | Dictionary-learning/network classes: `LapRegSparseNet`, `StationarySparseNet`, `HeatDiffSparseNet`, `ApproximateKSVD`. |
+| `graph_dl/datasets.py` | PyTorch datasets: `StatDataset`, `PolyDataset`, `FlankerDataset`, `SmoothDataset`. |
+| `graph_dl/metrics.py` | Evaluation metrics: MSE, cosine similarity, NAE, F1/precision/recall, Laplacian evaluation, filter error. |
+| `graph_dl/sparse_coding.py` | Sparse coding algorithms: `_ISTA` and `_AIHT`. |
+| `graph_dl/utils.py` | Helpers: parameter printer, `bcd_glasso`, duplication matrix, graph generators, matching, small-world/modularity utilities. |
+| `graph_dl/config.py` | Shared experiment-path builders and subprocess helpers. |
+| `graph_dl/runners.py` | Algorithm runner classes (`GlamaRunner`, `SmoothRunner`, `PolyRunner`, `PglRunner`). |
 
 ---
 
@@ -103,7 +103,7 @@ Common arguments:
 
 Algorithm-specific arguments are added automatically; run `python run_gl.py --help` to see them.
 
-The actual algorithm logic lives in `joint_ol_gl/runners.py` as `GlamaRunner`, `SmoothRunner`, `PolyRunner`, and `PglRunner`.
+The actual algorithm logic lives in `graph_dl/runners.py` as `GlamaRunner`, `SmoothRunner`, `PolyRunner`, and `PglRunner`.
 
 ---
 

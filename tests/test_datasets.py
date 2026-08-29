@@ -2,7 +2,7 @@
 
 import torch
 
-from joint_ol_gl.datasets import StatDataset, FlankerDataset
+from graph_dl.datasets import StatDataset, FlankerDataset
 
 
 def test_stat_dataset_shape():
