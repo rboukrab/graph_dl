@@ -40,7 +40,8 @@ if __name__ == '__main__':
     for n_samples in ns:
         for seed in range(1, 101):
             cmd = [
-                sys.executable, 'gl_poly.py',
+                sys.executable, 'run_gl.py',
+                '--algorithm', 'poly',
                 '--device', str(device),
                 '--data_set', str(data_set),
                 '--n_iters', str(n_iters),

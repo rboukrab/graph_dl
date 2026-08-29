@@ -70,7 +70,7 @@ Source code lives under the `core/` package:
 - **GAMA** — ADMM-based graphical lasso variant.
 - **GLAMA** — Laplacian-constrained ADMM graph learner (used for GMRF / stationary signals).
 - **StationaryADMM** — ADMM solver for stationary (polynomial spectral) graph learning.
-- **ProjADMM / ProjADMM2** — projection-ADMM Laplacian learners used by `gl_smooth.py` and `gl_poly.py`.
+- **ProjADMM / ProjADMM2** — projection-ADMM Laplacian learners used by `run_gl.py --algorithm smooth` and `run_gl.py --algorithm poly`.
 - **HomogeneousSelfDualEmbedding** — self-dual embedding solver. **Note:** currently implemented only for `dim=3`.
 
 ---
@@ -107,19 +107,6 @@ The actual algorithm logic lives in `core/runners.py` as `GlamaRunner`, `SmoothR
 
 ---
 
-### Backward-compatible wrappers
-
-The old scripts still work and simply forward to `run_gl.py`:
-
-- `gl_glama.py`
-- `gl_smooth.py`
-- `gl_poly.py`
-- `gl_pgl.py`
-
-This keeps existing commands, grid-search scripts, and plot-script directory patterns working.
-
----
-
 ### `joint_dl_gl.py` — Joint dictionary learning + graph learning
 
 Trains a dictionary and a graph jointly.
@@ -139,10 +126,10 @@ Supported graph learners: `known`, `bcd`, `gama`, `glama`, `admm`.
 
 | Script | What it does | How to run |
 |--------|--------------|------------|
-| `grid_search_gl_glama.py` | Sweeps `gamma`/`delta` for `gl_glama.py`. | `python grid_search_gl_glama.py --data_set stat` |
-| `grid_search_gl_smooth.py` | Sweeps `alpha`/`beta` for `gl_smooth.py`. | `python grid_search_gl_smooth.py --data_set stat` |
-| `grid_search_gl_poly.py` | Sweeps `deg`/`alpha` for `gl_poly.py`. | `python grid_search_gl_poly.py --data_set stat` |
-| `grid_search_gl_pgl.py` | Sweeps `rho`/`eta` for `gl_pgl.py`. | `python grid_search_gl_pgl.py --data_set stat` |
+| `grid_search_gl_glama.py` | Sweeps `gamma`/`delta` for `run_gl.py --algorithm glama`. | `python grid_search_gl_glama.py --data_set stat` |
+| `grid_search_gl_smooth.py` | Sweeps `alpha`/`beta` for `run_gl.py --algorithm smooth`. | `python grid_search_gl_smooth.py --data_set stat` |
+| `grid_search_gl_poly.py` | Sweeps `deg`/`alpha` for `run_gl.py --algorithm poly`. | `python grid_search_gl_poly.py --data_set stat` |
+| `grid_search_gl_pgl.py` | Sweeps `rho`/`eta` for `run_gl.py --algorithm pgl`. | `python grid_search_gl_pgl.py --data_set stat` |
 | `var_n_samples_gl_*.py` | Varies number of samples `N` (log-spaced) and reruns each method with many seeds. | `python var_n_samples_gl_glama.py --data_set stat` |
 
 These scripts now use `subprocess.run([sys.executable, ...])` and work on Windows as well as Linux/macOS.
@@ -218,20 +205,20 @@ The test suite covers:
 **Graph learning on synthetic GMRF signals:**
 
 ```bash
-python gl_glama.py --data_set stat --dim 20 --n_samples 100000 \
+python run_gl.py --algorithm glama --data_set stat --dim 20 --n_samples 100000 \
   --gamma 1e-3 --delta 1e-1 --n_iters 1000
 ```
 
 **Smoothness-prior graph learning on fMRI:**
 
 ```bash
-python gl_smooth.py --data_set fmri --alpha 1e-2 --beta 0.3 --sim_time 30
+python run_gl.py --algorithm smooth --data_set fmri --alpha 1e-2 --beta 0.3 --sim_time 30
 ```
 
 **Polynomial graph learning:**
 
 ```bash
-python gl_poly.py --data_set stat --dim 20 --deg 2 --alpha 4 --n_iters 1000
+python run_gl.py --algorithm poly --data_set stat --dim 20 --deg 2 --alpha 4 --n_iters 1000
 ```
 
 **Benchmark the L-update:**
