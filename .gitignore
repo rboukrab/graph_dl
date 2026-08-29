@@ -21,6 +21,7 @@ fmri/
 img/
 neuroemo/
 synth/
+other/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -50,6 +51,7 @@ results/
 *.pkl
 *.pt
 *.pth
+*.tex
 
 # OS
 .DS_Store
