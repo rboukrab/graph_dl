@@ -40,6 +40,9 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
         help="Number of samples (for synthetic datasets)",
     )
     parser.add_argument(
+        "--dim", type=int, default=20, help="Graph dimension"
+    )
+    parser.add_argument(
         "--n_iters", type=int, default=1, help="Number of outer iterations"
     )
     parser.add_argument(
@@ -195,6 +198,8 @@ def main() -> None:
         str(args.data_set),
         "--n_samples",
         str(args.n_samples),
+        "--dim",
+        str(args.dim),
         "--n_iters",
         str(args.n_iters),
         "--sim_time",
