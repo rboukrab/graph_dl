@@ -126,10 +126,7 @@ Supported graph learners: `known`, `bcd`, `gama`, `glama`, `admm`.
 
 | Script | What it does | How to run |
 |--------|--------------|------------|
-| `grid_search_gl_glama.py` | Sweeps `gamma`/`delta` for `run_gl.py --algorithm glama`. | `python grid_search_gl_glama.py --data_set stat` |
-| `grid_search_gl_smooth.py` | Sweeps `alpha`/`beta` for `run_gl.py --algorithm smooth`. | `python grid_search_gl_smooth.py --data_set stat` |
-| `grid_search_gl_poly.py` | Sweeps `deg`/`alpha` for `run_gl.py --algorithm poly`. | `python grid_search_gl_poly.py --data_set stat` |
-| `grid_search_gl_pgl.py` | Sweeps `rho`/`eta` for `run_gl.py --algorithm pgl`. | `python grid_search_gl_pgl.py --data_set stat` |
+| `grid_search_gl.py` | Sweeps algorithm hyper-parameters (`gamma`/`delta`, `alpha`/`beta`, `deg`/`alpha`, or `rho`/`eta`). | `python grid_search_gl.py --algorithm glama --data_set stat` |
 | `var_n_samples_gl_*.py` | Varies number of samples `N` (log-spaced) and reruns each method with many seeds. | `python var_n_samples_gl_glama.py --data_set stat` |
 
 These scripts now use `subprocess.run([sys.executable, ...])` and work on Windows as well as Linux/macOS.

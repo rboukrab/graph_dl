@@ -483,13 +483,15 @@
             "justMyCode": false
         },
         {
-            "name": "grid_search_gl_glama.py",
+            "name": "grid_search_gl.py (glama)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/grid_search_gl_glama.py",
+            "program": "${workspaceFolder}/grid_search_gl.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "args": [
+                "--algorithm",
+                "glama",
                 "--data_set",
                 "stat",
                 "--n_iters",
