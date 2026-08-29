@@ -130,7 +130,7 @@ class FlankerDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.X.shape[0]
 
-class SmoothDataset(torch.utils.data.Dataset):
+class SmoothDictDataset(torch.utils.data.Dataset):
 
     def __init__(
             self,
@@ -141,7 +141,7 @@ class SmoothDataset(torch.utils.data.Dataset):
             seed,
             snr
     ):
-        super(SmoothDataset).__init__()
+        super(SmoothDictDataset).__init__()
         self.n_samples = n_samples
         self.n_atoms = n_atoms
         self.sparsity = sparsity
