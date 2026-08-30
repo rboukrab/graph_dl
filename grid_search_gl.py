@@ -64,6 +64,15 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
         default="binary",
         help="How to compute stat-set precision/recall/F1",
     )
+    parser.add_argument(
+        "--seed", type=int, default=1, help="First random seed"
+    )
+    parser.add_argument(
+        "--n_seeds",
+        type=int,
+        default=None,
+        help="Number of random seeds per grid cell (default: algorithm-specific)",
+    )
 
 
 def _add_glama_args(parser: argparse.ArgumentParser) -> None:
@@ -217,16 +226,27 @@ def main() -> None:
         str(args.metric_mode),
     ]
 
+    if args.n_seeds is not None:
+        seeds = range(args.seed, args.seed + args.n_seeds)
+    elif algorithm == "glama":
+        seeds = range(1, 2)
+    elif algorithm == "smooth":
+        seeds = range(1, 2)
+    elif algorithm == "poly":
+        seeds = range(1, 301)
+    elif algorithm == "pgl":
+        seeds = range(1, 11)
+    else:
+        raise ValueError(f"Unsupported algorithm: {algorithm}")
+
     if algorithm == "glama":
         xs = np.logspace(args.min_gamma_exp, args.max_gamma_exp, args.n_gamma)
         ys = np.logspace(args.min_delta_exp, args.max_delta_exp, args.n_delta)
         x_name, y_name = "--gamma", "--delta"
-        seeds = range(1, 2)
     elif algorithm == "smooth":
         xs = np.logspace(args.min_alpha_exp, args.max_alpha_exp, args.n_alpha)
         ys = np.logspace(args.min_beta_exp, args.max_beta_exp, args.n_beta)
         x_name, y_name = "--alpha", "--beta"
-        seeds = range(1, 2)
         base_cmd.extend([
             "--k_nn", str(args.k_nn),
             "--sigma2", str(args.sigma2),
@@ -235,12 +255,10 @@ def main() -> None:
         xs = np.arange(args.min_deg, args.max_deg + 1)
         ys = np.logspace(args.min_alpha_exp, args.max_alpha_exp, args.n_alpha)
         x_name, y_name = "--deg", "--alpha"
-        seeds = range(1, 301)
     elif algorithm == "pgl":
         xs = np.logspace(args.min_rho_exp, args.max_rho_exp, args.n_rho)
         ys = np.logspace(args.min_eta_exp, args.max_eta_exp, args.n_eta)
         x_name, y_name = "--rho", "--eta"
-        seeds = range(1, 11)
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
