@@ -10,11 +10,15 @@ python grid_search_gl.py --algorithm pgl --data_set stat
 """
 
 import argparse
+import csv
+import os
 import subprocess
 import sys
 from typing import Union
 
 import numpy as np
+
+from core.config import ensure_log_dir, gl_experiment_path
 
 
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -72,6 +76,12 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=None,
         help="Number of random seeds per grid cell (default: algorithm-specific)",
+    )
+    parser.add_argument(
+        "--grid_summary",
+        type=str,
+        default=None,
+        help="Save final per-cell metrics to this CSV file",
     )
 
 
@@ -262,6 +272,12 @@ def main() -> None:
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
+    param_x_name = x_name.lstrip("-")
+    param_y_name = y_name.lstrip("-")
+    metric_names = ["f1_score", "precision", "recall", "nae", "sp"]
+    fieldnames = [param_x_name, param_y_name, "seed", *metric_names]
+    grid_rows = []
+
     for x in xs:
         for y in ys:
             for seed in seeds:
@@ -277,6 +293,36 @@ def main() -> None:
                     y_val,
                 ]
                 subprocess.run(cmd, check=False)
+
+                sim_path = gl_experiment_path(
+                    method=algorithm,
+                    data_set=args.data_set,
+                    dim=args.dim,
+                    n_samples=args.n_samples,
+                    param_x_name=param_x_name,
+                    param_x=x,
+                    param_y_name=param_y_name,
+                    param_y=y,
+                    seed=seed,
+                )
+                row = {param_x_name: x, param_y_name: y, "seed": seed}
+                for metric in metric_names:
+                    try:
+                        arr = np.load(os.path.join(sim_path, f"{metric}.npy"))
+                        row[metric] = float(arr[-1])
+                    except Exception:
+                        row[metric] = float("nan")
+                grid_rows.append(row)
+
+    if args.grid_summary:
+        summary_dir = os.path.dirname(args.grid_summary)
+        if summary_dir:
+            ensure_log_dir(summary_dir)
+        with open(args.grid_summary, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(grid_rows)
+        print(f"Saved grid summary to {args.grid_summary}")
 
 
 if __name__ == "__main__":
