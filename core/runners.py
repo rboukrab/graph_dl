@@ -363,6 +363,10 @@ class SmoothRunner(GraphLearningRunner):
                             help="Number of nearest neighbours for --data_set smooth")
         parser.add_argument("--sigma2", type=float, default=0.0,
                             help="Noise power for --data_set smooth")
+        parser.add_argument("--inner_metrics", action="store_true",
+                            help="Compute metrics at every inner projection iteration")
+        parser.add_argument("--inner_metric_interval", type=int, default=1,
+                            help="Compute inner metrics every N inner iterations")
 
     def setup(self) -> None:
         from core.graph_learn import ProjADMM2, LaplacianIPM, LaplacianIPMSparse, LaplacianActiveSet
@@ -413,6 +417,60 @@ class SmoothRunner(GraphLearningRunner):
             )
         self.X_train = self.dataset.X.to(self.device)
 
+        self.inner_metrics = getattr(self.args, "inner_metrics", False)
+        self.inner_metric_interval = getattr(self.args, "inner_metric_interval", 1)
+        if self.inner_metrics and self.data_set not in ("stat", "smooth"):
+            raise ValueError("--inner_metrics is only supported for stat/smooth datasets")
+        if self.inner_metrics:
+            self._gt_laplacian_norm = float(np.linalg.norm(self.graph.L.todense()))
+
+    def _inner_metric_callback(self, inner_iter: int, L: torch.Tensor) -> None:
+        if inner_iter % self.inner_metric_interval != 0:
+            return
+        scale = self._gt_laplacian_norm / torch.norm(L)
+        scaled = scale * L
+        if getattr(self.args, "metric_mode", "binary") == "weighted":
+            metrics = evaluate_laplacian_weighted(self.graph, scaled)
+        else:
+            metrics = evaluate_laplacian(self.graph, scaled)
+        for key in ("nae", "precision", "recall", "f1_score", "sp"):
+            if key in metrics:
+                self.metrics[key].append(metrics[key])
+        desc = (
+            f"inner_iter={inner_iter}, "
+            f"f1-score={100*metrics.get('f1_score', 0):.2f}, "
+            f"nae={metrics.get('nae', 1):.5f}, "
+            f"sp={metrics.get('sp', 0)}"
+        )
+        self.pbar.set_description(desc)
+
+    def _allocate_metrics(self, n_metric_steps: int) -> None:
+        if self.inner_metrics:
+            self.metrics = {
+                "sp": [],
+                "accum_time": [],
+                "nae": [],
+                "precision": [],
+                "recall": [],
+                "f1_score": [],
+            }
+        else:
+            super()._allocate_metrics(n_metric_steps)
+
+    def _compute_metrics(self, i_test: int) -> None:
+        if self.inner_metrics:
+            return
+        super()._compute_metrics(i_test)
+
+    def _save_results(self) -> None:
+        if self.inner_metrics:
+            for key, value in self.metrics.items():
+                arr = np.asarray(value)
+                if arr.size > 0:
+                    np.save(os.path.join(self.sim_path, f"{key}.npy"), arr)
+        else:
+            super()._save_results()
+
     def step(self, iteration: int) -> None:
         L = self.graph_learner.L.detach().clone()
         Y_train = self.X_train @ torch.linalg.inv(
@@ -420,8 +478,12 @@ class SmoothRunner(GraphLearningRunner):
         )
         C = Y_train.T @ Y_train
         H_k = -self.alpha * C / self.beta
+        callback = self._inner_metric_callback if self.inner_metrics else None
         self.graph_learner.forward(
-            F_t=H_k, tolerance=self.tol, max_iter=self.max_iter
+            F_t=H_k,
+            tolerance=self.tol,
+            max_iter=self.max_iter,
+            callback=callback,
         )
 
 
