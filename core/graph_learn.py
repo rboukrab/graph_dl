@@ -1637,12 +1637,43 @@ class LaplacianActiveSet:
         q_norm = q / self.beta
         g = self.P0_inv * q_norm
 
-        # Equality-constrained minimizer.
-        y = self._N_eq_inv @ (self._A_mul_vec(g) - self.b)
-        l = g - self.P0_inv * self._A_T_mul_vec(y)
+        # Try to warm-start from the previous active set if available.
+        warm_started = False
+        prev_W = getattr(self, "W", None)
+        prev_l = getattr(self, "l", None)
+        if prev_W is not None and prev_l is not None and len(prev_W) > 0:
+            try:
+                A_dense = self.A.to_dense()
+                rows = [A_dense]
+                for edge_idx in prev_W:
+                    row = torch.zeros(self.m, dtype=torch.float64,
+                                      device=self.device)
+                    row[self._off_positions_list[edge_idx]] = 1.0
+                    rows.append(row)
+                M = torch.vstack(rows)
+                # N = M @ diag(P0_inv) @ M.T
+                N = (M * self.P0_inv.unsqueeze(0)) @ M.T
+                N_inv = torch.from_numpy(
+                    np.linalg.inv(N.detach().cpu().numpy())
+                ).to(device=self.device, dtype=torch.float64)
+                b_ext = torch.zeros(M.shape[0], dtype=torch.float64,
+                                    device=self.device)
+                b_ext[:self.dim + 1] = self.b
+                y = N_inv @ (M @ g - b_ext)
+                l = g - self.P0_inv * (M.T @ y)
+                if (l[self.off_positions] <= 1e-12).all():
+                    W = list(prev_W)
+                    warm_started = True
+            except Exception:
+                warm_started = False
 
-        W = []
-        N_inv = self._N_eq_inv.clone()
+        if not warm_started:
+            # Equality-constrained minimizer (cold start).
+            y = self._N_eq_inv @ (self._A_mul_vec(g) - self.b)
+            l = g - self.P0_inv * self._A_T_mul_vec(y)
+            W = []
+            N_inv = self._N_eq_inv.clone()
+
         self.iter = 0
 
         for _ in range(max_iter):
