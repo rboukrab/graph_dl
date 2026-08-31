@@ -163,7 +163,7 @@ def evaluate_adjacency_weighted(
         n = W.shape[0]
         iu = np.triu_indices(n, k=1)
 
-        scores = np.abs(W[iu])
+        scores = np.clip(np.abs(W[iu]), 0.0, 1.0)
         true = (W_true[iu] != 0).astype(float)
 
         tp = float((scores * true).sum())
