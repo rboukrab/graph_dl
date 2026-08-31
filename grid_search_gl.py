@@ -108,6 +108,12 @@ def _add_glama_args(parser: argparse.ArgumentParser) -> None:
 
 def _add_smooth_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
+        "--solver", type=str,
+        choices=["projadmm2", "ipm", "activeset"],
+        default="activeset",
+        help="Inner solver for the Laplacian projection",
+    )
+    parser.add_argument(
         "--min_alpha_exp", type=float, default=-2.9284862,
         help="log10(min alpha)"
     )
@@ -266,6 +272,7 @@ def main() -> None:
         ys = np.logspace(args.min_beta_exp, args.max_beta_exp, args.n_beta)
         x_name, y_name = "--alpha", "--beta"
         base_cmd.extend([
+            "--solver", str(args.solver),
             "--k_nn", str(args.k_nn),
             "--sigma2", str(args.sigma2),
             "--inner_metrics",
