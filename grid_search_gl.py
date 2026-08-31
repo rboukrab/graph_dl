@@ -133,6 +133,14 @@ def _add_smooth_args(parser: argparse.ArgumentParser) -> None:
         "--sigma2", type=float, default=0.0,
         help="Noise power for --data_set smooth"
     )
+    parser.add_argument(
+        "--inner_metrics", action="store_true",
+        help="Compute metrics at every inner projection iteration"
+    )
+    parser.add_argument(
+        "--inner_metric_interval", type=int, default=1,
+        help="Compute inner metrics every N inner iterations"
+    )
 
 
 def _add_poly_args(parser: argparse.ArgumentParser) -> None:
@@ -260,6 +268,8 @@ def main() -> None:
         base_cmd.extend([
             "--k_nn", str(args.k_nn),
             "--sigma2", str(args.sigma2),
+            "--inner_metrics",
+            "--inner_metric_interval", str(args.inner_metric_interval),
         ])
     elif algorithm == "poly":
         xs = np.arange(args.min_deg, args.max_deg + 1)
