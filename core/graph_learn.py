@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import torch
 from qpth.qp import QPFunction
@@ -851,15 +853,23 @@ class ProjADMM2:
         tolerance: float,
         max_iter: int,
         callback=None,
+        max_time: float = None,
     ):
 
         f_t = F_t.reshape((self.dim ** 2,))
         q = self.M_dup.T @ f_t
 
+        if max_time is not None:
+            max_iter = max(max_iter, 10 ** 9)
+
+        t0 = time.perf_counter() if max_time is not None else None
+
         # Projection step
         self.iter = 0
         if self.mode == 'normal':
             for _ in range(max_iter):
+                if max_time is not None and (time.perf_counter() - t0) > max_time:
+                    break
                 l_old = self.l.detach().clone()
                 l_mu = torch.linalg.solve(self.M, torch.cat((
                     q + self.rho * (self.z + self.v),
@@ -875,11 +885,13 @@ class ProjADMM2:
                 if callback is not None:
                     L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
                     callback(self.iter, L_iter)
-                if err < tolerance:
+                if max_time is None and err < tolerance:
                     break
 
         if self.mode == 'optimized':
             for _ in range(max_iter):
+                if max_time is not None and (time.perf_counter() - t0) > max_time:
+                    break
                 l_old = self.l.detach().clone()
                 r = q + self.rho * (self.z + self.v)
                 s = self.A @ self.Rinv @ r - self.b
@@ -897,7 +909,7 @@ class ProjADMM2:
                 if callback is not None:
                     L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
                     callback(self.iter, L_iter)
-                if err < tolerance:
+                if max_time is None and err < tolerance:
                     break
 
         l = self.M_dup @ self.l
@@ -923,7 +935,6 @@ class LaplacianIPM:
             dim: int,
             L: torch.Tensor = None,
             vol: float = 100.,
-            beta: float = 1.0,
             t0: float = 1.0,
             mu: float = 2.0,
             eps_out: float = 1e-6,
@@ -936,7 +947,6 @@ class LaplacianIPM:
         self.device = device
         self.dim = dim
         self.vol = float(vol)
-        self.beta = float(beta)
         self.t = float(t0)
         self.mu = float(mu)
         self.eps_out = float(eps_out)
@@ -956,8 +966,8 @@ class LaplacianIPM:
             )
         self.D = D
 
-        # P = beta D^T D  (diagonal with 1's for diagonals, 2's for off-diags).
-        self.P = beta * (D.T @ D)
+        # P = D^T D  (diagonal with 1's for diagonals, 2's for off-diags).
+        self.P = D.T @ D
         self.P_diag = self.P.diag()
 
         # Equality constraints: row sums zero + trace = vol.
@@ -1009,7 +1019,8 @@ class LaplacianIPM:
                 F_t: torch.FloatTensor,
                 tolerance: float = 1e-6,
                 max_iter: int = 50,
-                callback=None):
+                callback=None,
+                max_time: float = None):
         """Run the barrier interior-point algorithm.
 
         Parameters
@@ -1023,16 +1034,26 @@ class LaplacianIPM:
         callback : callable, optional
             If given, called as ``callback(iteration, L)`` after each outer
             iteration with the current Laplacian estimate.
+        max_time : float, optional
+            Maximum wall time in seconds. If set, the algorithm stops after
+            the first outer iteration that exceeds this limit.
         """
+        if max_time is not None:
+            max_iter = max(max_iter, 10 ** 9)
+
         q = self.D.T @ F_t.reshape(-1).to(dtype=torch.float64,
                                            device=self.device)
         t = float(self.t)
         eps_out = max(tolerance, self.eps_out)
 
+        t0 = time.perf_counter() if max_time is not None else None
+
         self.iter = 0
         for _ in range(max_iter):
             self.iter = _ + 1
-            if self.D_minus / t <= eps_out:
+            if max_time is not None and (time.perf_counter() - t0) > max_time:
+                break
+            if max_time is None and self.D_minus / t <= eps_out:
                 if callback is not None:
                     L_iter = (self.D @ self.l).reshape(self.dim, self.dim).to(
                         device=self.device, dtype=torch.float32
@@ -1104,7 +1125,6 @@ class LaplacianIPMSparse:
             dim: int,
             L: torch.Tensor = None,
             vol: float = 100.,
-            beta: float = 1.0,
             t0: float = 1.0,
             mu: float = 2.0,
             eps_out: float = 1e-6,
@@ -1117,7 +1137,6 @@ class LaplacianIPMSparse:
         self.device = device
         self.dim = dim
         self.vol = float(vol)
-        self.beta = float(beta)
         self.t = float(t0)
         self.mu = float(mu)
         self.eps_out = float(eps_out)
@@ -1174,9 +1193,8 @@ class LaplacianIPMSparse:
         self.diag_mask[self.a2.indices()[1]] = True
         self.off_mask = ~self.diag_mask
 
-        # P = beta D^T D  (diagonal with 1's for diagonals, 2's for off-diags).
-        self.P_diag = beta * (self.diag_mask.to(torch.float64)
-                              + 2.0 * self.off_mask.to(torch.float64))
+        # P = D^T D  (diagonal with 1's for diagonals, 2's for off-diags).
+        self.P_diag = self.diag_mask.to(torch.float64) + 2.0 * self.off_mask.to(torch.float64)
 
         # Precompute index structures used to build the Schur complement S
         # and A^T temp without forming dense matrices in the inner loop.
@@ -1261,17 +1279,25 @@ class LaplacianIPMSparse:
                 F_t: torch.FloatTensor,
                 tolerance: float = 1e-6,
                 max_iter: int = 50,
-                callback=None):
+                callback=None,
+                max_time: float = None):
         """Run the barrier interior-point algorithm."""
+        if max_time is not None:
+            max_iter = max(max_iter, 10 ** 9)
+
         q = self.D.T @ F_t.reshape(-1).to(dtype=torch.float64,
                                            device=self.device)
         t = float(self.t)
         eps_out = max(tolerance, self.eps_out)
 
+        t0 = time.perf_counter() if max_time is not None else None
+
         self.iter = 0
         for _ in range(max_iter):
             self.iter = _ + 1
-            if self.D_minus / t <= eps_out:
+            if max_time is not None and (time.perf_counter() - t0) > max_time:
+                break
+            if max_time is None and self.D_minus / t <= eps_out:
                 if callback is not None:
                     L_iter = (self.D @ self.l).reshape(self.dim, self.dim).to(
                         device=self.device, dtype=torch.float32
@@ -1377,14 +1403,12 @@ class LaplacianActiveSet:
             dim: int,
             L: torch.Tensor = None,
             vol: float = 100.,
-            beta: float = 1.0,
             max_iter: int = None,
             device: str = 'cpu'
     ):
         self.device = device
         self.dim = dim
         self.vol = float(vol)
-        self.beta = float(beta)
         self.D_minus = int(dim * (dim - 1) / 2)
         if max_iter is None:
             max_iter = 10 * self.D_minus
@@ -1436,10 +1460,9 @@ class LaplacianActiveSet:
         self.off_positions = torch.where(self.off_mask)[0]
         self._off_positions_list = [int(p) for p in self.off_positions]
 
-        # P = beta D^T D  (diagonal with 1's for diagonals, 2's for off-diags).
-        self.P_diag = beta * (self.diag_mask.to(torch.float64)
-                              + 2.0 * self.off_mask.to(torch.float64))
-        self.P0_inv = beta / self.P_diag
+        # P = D^T D  (diagonal with 1's for diagonals, 2's for off-diags).
+        self.P_diag = self.diag_mask.to(torch.float64) + 2.0 * self.off_mask.to(torch.float64)
+        self.P0_inv = 1.0 / self.P_diag
 
         # Precompute index structures for A * vector and A^T * vector.
         self._diag_pos = torch.tensor(
@@ -1612,7 +1635,8 @@ class LaplacianActiveSet:
         return W, y, N_inv, l
 
     def forward(self, F_t: torch.FloatTensor, max_iter: int = None,
-                tolerance: float = None, callback=None):
+                tolerance: float = None, callback=None,
+                max_time: float = None):
         """Run the dual active-set algorithm.
 
         Parameters
@@ -1628,14 +1652,20 @@ class LaplacianActiveSet:
         callback : callable, optional
             If given, called as ``callback(iteration, L)`` after each
             working-set update with the current Laplacian estimate.
+        max_time : float, optional
+            Maximum wall time in seconds. If set, the algorithm stops after
+            the first working-set update that exceeds this limit.
         """
         if max_iter is None:
             max_iter = self.max_iter
+        if max_time is not None:
+            max_iter = max(max_iter, 10 ** 9)
 
         q = self.D.T @ F_t.reshape(-1).to(dtype=torch.float64,
                                            device=self.device)
-        q_norm = q / self.beta
-        g = self.P0_inv * q_norm
+        g = self.P0_inv * q
+
+        t0 = time.perf_counter() if max_time is not None else None
 
         # Try to warm-start from the previous active set if available.
         warm_started = False
@@ -1678,6 +1708,8 @@ class LaplacianActiveSet:
 
         for _ in range(max_iter):
             self.iter = _ + 1
+            if max_time is not None and (time.perf_counter() - t0) > max_time:
+                break
             off_vals = l[self.off_positions]
 
             if callback is not None:

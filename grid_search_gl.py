@@ -275,9 +275,10 @@ def main() -> None:
             "--solver", str(args.solver),
             "--k_nn", str(args.k_nn),
             "--sigma2", str(args.sigma2),
-            "--inner_metrics",
-            "--inner_metric_interval", str(args.inner_metric_interval),
         ])
+        if args.inner_metrics:
+            base_cmd.append("--inner_metrics")
+            base_cmd.extend(["--inner_metric_interval", str(args.inner_metric_interval)])
     elif algorithm == "poly":
         xs = np.arange(args.min_deg, args.max_deg + 1)
         ys = np.logspace(args.min_alpha_exp, args.max_alpha_exp, args.n_alpha)

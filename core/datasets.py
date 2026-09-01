@@ -49,6 +49,75 @@ class StatDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.X.shape[0]
 
+
+class NoisyLaplacianDataset(torch.utils.data.Dataset):
+    r"""Dataset that corrupts a valid Laplacian with edge noise.
+
+    Generates a synthetic graph, computes its combinatorial Laplacian ``L``,
+    and adds symmetric noise to the off-diagonal (edge) entries to obtain a
+    matrix ``H`` that is no longer a valid Laplacian.  This is useful for
+    benchmarking Laplacian projection solvers: the solver receives ``H`` and
+    must project it back onto the Laplacian constraint set.
+
+    Parameters
+    ----------
+    seed : int
+        Random seed for reproducibility.
+    dim : int
+        Number of graph nodes.
+    noise_level : float, optional
+        Relative noise level.  Noise is scaled so that
+        ``||noise||_F = noise_level * ||L||_F`` (default 0.1).
+    graph_type : str, optional
+        Graph model to use.  Either ``"rbf"`` (default) or ``"rgg"``.
+    """
+
+    def __init__(
+        self,
+        seed: int,
+        dim: int,
+        noise_level: float = 0.1,
+        graph_type: str = "rbf",
+    ):
+        super().__init__()
+
+        np.random.seed(seed)
+
+        if graph_type == "rbf":
+            graph = rbf_graph(dim, seed)
+        elif graph_type == "rgg":
+            graph = random_geometric_graph(dim, seed, k=5)
+        else:
+            raise ValueError(f"graph_type must be 'rbf' or 'rgg', got {graph_type}")
+
+        graph.compute_laplacian()
+        L = np.asarray(graph.L.todense() if hasattr(graph.L, "todense") else graph.L)
+        L = L.astype(float)
+
+        # Symmetric noise on off-diagonal entries only.
+        noise = np.random.randn(dim, dim)
+        noise = (noise + noise.T) / 2.0
+        noise[np.diag_indices(dim)] = 0.0
+        noise_norm = np.linalg.norm(noise)
+        if noise_norm > 0:
+            noise *= noise_level * np.linalg.norm(L) / noise_norm
+
+        H = L + noise
+
+        self.graph = graph
+        self.L = torch.from_numpy(L).float()
+        self.H = torch.from_numpy(H).float()
+        self.vol = float(L.trace())
+        self.noise_level = float(noise_level)
+        self.graph_type = graph_type
+        self.X = self.H
+
+    def __getitem__(self, index):
+        return self.X[index]
+
+    def __len__(self):
+        return self.X.shape[0]
+
 class PolyDataset(torch.utils.data.Dataset):
 
     def __init__(self, gnum, gtype, dim, n):
