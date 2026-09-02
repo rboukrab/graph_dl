@@ -19,13 +19,34 @@ import os
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "times",
+    "font.size": 15,
+    "legend.fontsize": 10,
+    "figure.autolayout": True,
+})
 
 SOLVERS = ["ipm", "activeset", "admm"]
 COLORS = {"ipm": "C0", "activeset": "C1", "admm": "C2"}
 MARKERS = {"ipm": "o", "activeset": "s", "admm": "^"}
 LABELS = {"ipm": "IPM", "activeset": "Active Set", "admm": "ADMM"}
+
+METRIC_LABELS = {
+    "objectives": r"$\frac{1}{2}\Vert \hat{\mathbf{L}} - \bar{\mathbf{L}} \Vert_F^2$",
+    "recovery_errors": r"$\Vert \hat{\mathbf{L}} - \mathbf{L} \Vert_F / \Vert \mathbf{L} \Vert_F$",
+    "precision": r"Precision (\%)",
+    "recall": r"Recall (\%)",
+    "f1_score": r"F-score (\%)",
+    "nae": r"NAE $= \Vert W - W_0 \Vert_F / \Vert W_0 \Vert_F$",
+    "row_sum_max_abs": r"$\max_i \vert \sum_j L_{ij} \vert$",
+    "trace_err": r"$\vert \mathrm{Tr}(L) - \mathrm{vol} \vert$",
+    "max_off": r"$\max_{i \neq j} L_{ij}$",
+    "sp": r"NNZ",
+}
 
 
 def load_evolution(log_dir: str, solver: str, run_idx: int):
@@ -113,7 +134,7 @@ def main() -> None:
     parser.add_argument("--log_dir", type=str, required=True,
                         help="Path to the benchmark_projection log directory")
     parser.add_argument("--output", type=str, default=None,
-                        help="Output PNG path (default: <log_dir>/evolution_<x_axis>.png)")
+                        help="Output image path (also saved as .svg; default: <log_dir>/evolution_<x_axis>.png)")
     parser.add_argument("--x_axis", type=str, default="iteration",
                         choices=["iteration", "time"],
                         help="Plot against solver iteration or wall time")
@@ -162,8 +183,7 @@ def main() -> None:
                 marker=MARKERS[solver],
                 markevery=markevery,
                 linewidth=1.5,
-                markersize=5,
-                markerfacecolor="none",
+                markersize=8,
             )
             std_key = f"{metric}_std"
             if std_key in evo:
@@ -174,8 +194,10 @@ def main() -> None:
                     alpha=0.2,
                     color=COLORS[solver],
                 )
-            ax.set_ylabel(metric.replace("_", " ").title())
+            ax.set_ylabel(METRIC_LABELS.get(metric, metric.replace("_", " ").title()))
             ax.grid(True, linestyle="--", alpha=0.6)
+            if metric in ("f1_score", "precision", "recall"):
+                ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, symbol=""))
             if metric in ("objectives", "recovery_errors", "nae") and np.min(y) > 0:
                 ax.set_yscale("log")
 
@@ -186,6 +208,9 @@ def main() -> None:
     plt.tight_layout(rect=[0, 0, 1, 0.97])
     plt.savefig(args.output, dpi=150)
     print(f"Saved evolution plot to {args.output}")
+    svg_output = os.path.splitext(args.output)[0] + ".svg"
+    plt.savefig(svg_output)
+    print(f"Saved evolution plot to {svg_output}")
 
 
 if __name__ == "__main__":
