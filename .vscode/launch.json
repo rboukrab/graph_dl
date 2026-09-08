@@ -540,7 +540,7 @@
             "args": [
                 "--algorithm",
                 "smooth",
-                "--solver", "projadmm2",
+                "--solver", "ProjADMM",
                 "--data_set",
                 "smooth",
                 "--dim",

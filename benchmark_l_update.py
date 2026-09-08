@@ -6,7 +6,7 @@ from core.config import benchmark_experiment_path, ensure_log_dir
 import torch
 import numpy as np
 from core.datasets import StatDataset
-from core.graph_learn import ProjADMM2
+from core.graph_learn import ProjADMM
 from torch.nn.functional import softshrink
 
 # Training settings
@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
     # Initialize graph learner
     graph_vol = graph.W.todense().sum()
-    graph_learner = ProjADMM2(
+    graph_learner = ProjADMM(
         dim=dim,
         mode=mode,
         L=(10 + 10 / 99) * torch.eye(dim, device=device) - (10 / 99) * torch.ones((dim, dim), device=device),

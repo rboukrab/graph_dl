@@ -2,7 +2,7 @@
 
 The benchmark corrupts a valid combinatorial Laplacian with edge noise using
 :class:`core.datasets.NoisyLaplacianDataset` and measures how well each
-projection solver (LaplacianIPMSparse, LaplacianActiveSet, ProjADMM2) recovers
+projection solver (ProjIPM, LaplacianActiveSet, ProjADMM) recovers
 a valid Laplacian.  Metrics include wall time, inner iterations, constraint
 violations, objective value, and recovery error relative to the ground-truth
 Laplacian.
@@ -26,7 +26,7 @@ import torch
 
 from core.config import ensure_log_dir
 from core.datasets import NoisyLaplacianDataset
-from core.graph_learn import LaplacianActiveSet, LaplacianIPMSparse, ProjADMM2
+from core.graph_learn import LaplacianActiveSet, ProjIPM, ProjADMM
 from core.metrics import evaluate_laplacian_weighted
 
 
@@ -34,7 +34,7 @@ from core.metrics import evaluate_laplacian_weighted
 # paper over their slightly different APIs.
 SOLVERS = {
     "ipm": {
-        "class": LaplacianIPMSparse,
+        "class": ProjIPM,
         "kwargs": {"eps_in": 1e-3, "eps_out": 1e-3, "max_inner_iter": 100, "t0": 1.0},
         "call": lambda solver, H, tol, max_iter, max_time=None, callback=None: solver.forward(
             H, tolerance=tol, max_iter=max_iter, callback=callback, max_time=max_time
@@ -50,7 +50,7 @@ SOLVERS = {
         "iters": lambda solver: int(getattr(solver, "iter", -1)),
     },
     "admm": {
-        "class": ProjADMM2,
+        "class": ProjADMM,
         "kwargs": {"mode": "optimized"},
         "call": lambda solver, H, tol, max_iter, max_time=None, callback=None: solver.forward(
             H, tolerance=tol, max_iter=max_iter, callback=callback, max_time=max_time

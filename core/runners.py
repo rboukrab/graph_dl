@@ -350,7 +350,7 @@ class SmoothRunner(GraphLearningRunner):
     @classmethod
     def add_args(cls, parser: Any) -> None:
         parser.add_argument("--solver", type=str,
-                            choices=["projadmm2", "ipm", "activeset"],
+                            choices=["ProjADMM", "ipm", "activeset"],
                             default="activeset",
                             help="Inner solver for the Laplacian projection")
         parser.add_argument("--admm_mode", type=str,
@@ -369,7 +369,7 @@ class SmoothRunner(GraphLearningRunner):
                             help="Compute inner metrics every N inner iterations")
 
     def setup(self) -> None:
-        from core.graph_learn import ProjADMM2, LaplacianIPM, LaplacianIPMSparse, LaplacianActiveSet
+        from core.graph_learn import ProjADMM, ProjIPM, LaplacianActiveSet
 
         self.alpha = self.args.alpha
         self.beta = self.args.beta
@@ -389,8 +389,8 @@ class SmoothRunner(GraphLearningRunner):
         # smoothness update starts from the same point.
         L0 = torch.eye(self.dim, device=self.device)
 
-        if self.args.solver == "projadmm2":
-            self.graph_learner = ProjADMM2(
+        if self.args.solver == "ProjADMM":
+            self.graph_learner = ProjADMM(
                 dim=self.dim,
                 mode=self.args.admm_mode,
                 L=L0,
@@ -405,7 +405,7 @@ class SmoothRunner(GraphLearningRunner):
                 device=self.device,
             )
         else:
-            self.graph_learner = LaplacianIPMSparse(
+            self.graph_learner = ProjIPM(
                 dim=self.dim,
                 L=L0,
                 vol=graph_vol,
@@ -520,7 +520,7 @@ class PolyRunner(GraphLearningRunner):
         return ["filterr"]
 
     def setup(self) -> None:
-        from core.graph_learn import ProjADMM2
+        from core.graph_learn import ProjADMM
 
         self.deg = self.args.deg
         self.alpha = self.args.alpha
@@ -551,7 +551,7 @@ class PolyRunner(GraphLearningRunner):
         else:
             graph_vol = 100.0
 
-        self.graph_learner = ProjADMM2(
+        self.graph_learner = ProjADMM(
             dim=self.dim,
             mode=self.args.admm_mode,
             L=(10 + 10 / 99) * torch.eye(self.dim, device=self.device)

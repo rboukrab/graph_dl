@@ -109,7 +109,7 @@ def _add_glama_args(parser: argparse.ArgumentParser) -> None:
 def _add_smooth_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--solver", type=str,
-        choices=["projadmm2", "ipm", "activeset"],
+        choices=["ProjADMM", "ipm", "activeset"],
         default="activeset",
         help="Inner solver for the Laplacian projection",
     )

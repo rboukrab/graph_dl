@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from core.graph_learn import (
-    BCD, GAMA, GLAMA, StationaryADMM, ProjADMM2, LaplacianIPM, LaplacianActiveSet,
+    BCD, GAMA, GLAMA, StationaryADMM, ProjADMM, LaplacianActiveSet,
 )
 from tests.conftest import cpu_lapack_available
 
@@ -51,32 +51,13 @@ def test_stationary_admm_runs_one_iteration():
 
 def test_proj_admm2_runs_one_iteration():
     dim = 5
-    learner = ProjADMM2(dim=dim, mode="optimized", device="cpu")
+    learner = ProjADMM(dim=dim, mode="optimized", device="cpu")
     F = torch.randn(dim, dim, device="cpu")
     learner.forward(F_t=F, tolerance=1e-4, max_iter=1)
     assert learner.L.shape == (dim, dim)
 
 
-def test_laplacian_ipm_runs_and_is_laplacian():
-    dim = 5
-    learner = LaplacianIPM(dim=dim, vol=float(dim), device="cpu")
-    F = torch.randn(dim, dim, device="cpu")
-    F = (F + F.T) / 2
-    learner.forward(F_t=F, tolerance=1e-3, max_iter=20)
-    L = learner.L
-    assert L.shape == (dim, dim)
-    # Symmetry
-    assert torch.allclose(L, L.T, atol=1e-5)
-    # Row sums approximately zero
-    assert torch.abs(L.sum(dim=1)).max().item() < 1e-4
-    # Trace equals volume
-    assert abs(L.trace().item() - dim) < 1e-4
-    # Off-diagonals non-positive
-    off_diag = L[torch.eye(dim, device=L.device) == 0]
-    assert (off_diag <= 1e-6).all()
-
-
-def test_laplacian_active_set_runs_and_matches_ipm():
+def test_laplacian_active_set_runs_and_is_laplacian():
     dim = 5
     learner = LaplacianActiveSet(dim=dim, vol=float(dim), device="cpu")
     F = torch.randn(dim, dim, device="cpu")
@@ -93,9 +74,3 @@ def test_laplacian_active_set_runs_and_matches_ipm():
     # Off-diagonals non-positive
     off_diag = L[torch.eye(dim, device=L.device) == 0]
     assert (off_diag <= 1e-6).all()
-
-    # Compare with IPM
-    learner_ipm = LaplacianIPM(dim=dim, vol=float(dim), device="cpu")
-    learner_ipm.forward(F_t=F, tolerance=1e-6, max_iter=20)
-    rel_diff = torch.norm(L - learner_ipm.L) / torch.norm(learner_ipm.L)
-    assert rel_diff < 1e-3

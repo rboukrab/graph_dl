@@ -27,7 +27,7 @@ def _make_args(algorithm: str, data_set: str = "stat", dim: int = 6,
     if algorithm == "glama":
         base.update({"rho": 1e-3, "gamma": 1e-3, "delta": 1e-1})
     elif algorithm == "smooth":
-        base.update({"solver": "projadmm2", "admm_mode": "optimized",
+        base.update({"solver": "ProjADMM", "admm_mode": "optimized",
                      "alpha": 1e-2, "beta": 0.3, "tol": 1e-2, "max_iter": 2})
     elif algorithm == "poly":
         base.update({"admm_mode": "optimized", "deg": 1, "alpha": 1.0,

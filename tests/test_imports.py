@@ -14,7 +14,7 @@ def test_package_imports():
 def test_graph_learn_classes_available():
     from core.graph_learn import (
         BCD, GAMA, GLAMA, HomogeneousSelfDualEmbedding,
-        StationaryADMM, ProjADMM2, LaplacianIPM, LaplacianActiveSet,
+        StationaryADMM, ProjADMM, LaplacianActiveSet,
     )
     assert BCD is not None
     assert GAMA is not None

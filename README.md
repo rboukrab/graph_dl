@@ -53,7 +53,7 @@ Source code lives under the `core/` package:
 
 | Module | Purpose |
 |--------|---------|
-| `core/graph_learn.py` | Graph-learning solvers: `BCD`, `GAMA`, `GLAMA`, `HomogeneousSelfDualEmbedding`, `StationaryADMM`, `ProjADMM`, `ProjADMM2`. |
+| `core/graph_learn.py` | Graph-learning solvers: `BCD`, `GAMA`, `GLAMA`, `HomogeneousSelfDualEmbedding`, `StationaryADMM`, `ProjADMM`. |
 | `core/models.py` | Dictionary-learning/network classes: `LapRegSparseNet`, `StationarySparseNet`, `HeatDiffSparseNet`, `ApproximateKSVD`. |
 | `core/datasets.py` | PyTorch datasets: `StatDataset`, `PolyDataset`, `FlankerDataset`, `SmoothDictDataset`, `SmoothDataset`. |
 | `core/metrics.py` | Evaluation metrics: MSE, cosine similarity, NAE, F1/precision/recall, Laplacian evaluation, filter error. |
@@ -70,7 +70,7 @@ Source code lives under the `core/` package:
 - **GAMA** — ADMM-based graphical lasso variant.
 - **GLAMA** — Laplacian-constrained ADMM graph learner (used for GMRF / stationary signals).
 - **StationaryADMM** — ADMM solver for stationary (polynomial spectral) graph learning.
-- **ProjADMM / ProjADMM2** — projection-ADMM Laplacian learners used by `run_gl.py --algorithm smooth` and `run_gl.py --algorithm poly`.
+- **ProjADMM** — projection-ADMM Laplacian learner used by `run_gl.py --algorithm smooth` and `run_gl.py --algorithm poly`.
 - **HomogeneousSelfDualEmbedding** — self-dual embedding solver. **Note:** currently implemented only for `dim=3`.
 
 ---
@@ -137,7 +137,7 @@ These scripts now use `subprocess.run([sys.executable, ...])` and work on Window
 
 ### `benchmark_l_update.py`
 
-Benchmarks the inner `L`-update step of polynomial graph learning using `ProjADMM2` with fixed known coefficients.
+Benchmarks the inner `L`-update step of polynomial graph learning using `ProjADMM` with fixed known coefficients.
 
 ```bash
 python benchmark_l_update.py --dim 100 --deg 2 --alpha 4 \
@@ -146,7 +146,7 @@ python benchmark_l_update.py --dim 100 --deg 2 --alpha 4 \
 
 ### `benchmark_projection.py`
 
-Compares the three Laplacian projection solvers (`LaplacianIPMSparse`, `LaplacianActiveSet`, `ProjADMM2`) on the same realistic `H_k` taken from `SmoothRunner`.
+Compares the three Laplacian projection solvers (`ProjIPM`, `LaplacianActiveSet`, `ProjADMM`) on the same realistic `H_k` taken from `SmoothRunner`.
 
 ```bash
 python benchmark_projection.py --dim 20 --n_samples 100000 --alpha 1e-2 --beta 10 --n_reps 10
@@ -201,9 +201,8 @@ The test suite covers:
 
 1. **`synth/` legacy scripts** (`synth/dl/*.py`, `synth/gl/*.py`) reference missing classes such as `SparseNet`, `SynthDataset`, and `cpp.bcd`. They are not currently runnable and are preserved as reference/legacy code.
 2. **`HomogeneousSelfDualEmbedding`** is implemented only for `dim=3`; other sizes raise `NotImplementedError`.
-3. **`ProjADMM`** only supports `mode='optimized'`; the broken `mode='normal'` branch was removed.
-4. Plotting scripts use the TkAgg backend and `plt.show(block=True)`; they are interactive and may hang in headless environments.
-5. The `joint_dl_gl.py` `fmri` branch contains hard-coded ROI indices for a specific experiment.
+3. Plotting scripts use the TkAgg backend and `plt.show(block=True)`; they are interactive and may hang in headless environments.
+4. The `joint_dl_gl.py` `fmri` branch contains hard-coded ROI indices for a specific experiment.
 
 ---
 
