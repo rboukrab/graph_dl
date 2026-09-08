@@ -5,6 +5,29 @@ from torch.nn import Module
 from pygsp.graphs import Graph
 from sklearn.metrics import f1_score, recall_score, precision_score
 
+
+def _nbytes(value) -> int:
+    """Bytes held by a tensor/array, or by a list/tuple of them."""
+    if isinstance(value, torch.Tensor):
+        if value.is_sparse:
+            if not value.is_coalesced():
+                value = value.coalesce()
+            return (
+                value.values().element_size() * value.values().nelement()
+                + value.indices().element_size() * value.indices().nelement()
+            )
+        return value.element_size() * value.nelement()
+    if isinstance(value, np.ndarray):
+        return value.nbytes
+    if isinstance(value, (list, tuple)):
+        return sum(_nbytes(v) for v in value)
+    return 0
+
+
+def get_object_memory(obj) -> float:
+    """Memory (MB) held by the tensor/array attributes of an object."""
+    return sum(_nbytes(v) for v in vars(obj).values()) / (1024.0 ** 2)
+
 def compute_mse(
         sparsenet: Module,
         train_dataloader: torch.utils.data.DataLoader,

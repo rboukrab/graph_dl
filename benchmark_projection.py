@@ -27,7 +27,7 @@ import torch
 from core.config import ensure_log_dir
 from core.datasets import NoisyLaplacianDataset
 from core.graph_learn import LaplacianActiveSet, ProjIPM, ProjADMM
-from core.metrics import evaluate_laplacian_weighted
+from core.metrics import evaluate_laplacian_weighted, get_object_memory
 
 
 # Solvers to benchmark, with constructor flags and forward-call wrappers to
@@ -258,6 +258,8 @@ def _benchmark_solver(
     metrics["mem_delta_kb_mean"] = float(np.mean(mem_deltas_kb))
     metrics["objective_std"] = float(np.std(objectives))
     metrics["recovery_error_std"] = float(np.std(recovery_errors))
+    # Solver attribute footprint (constant during the run) in MB.
+    metrics["memory_mb"] = get_object_memory(solver)
     metrics["evolution"] = callback.to_dict()
 
     if device.type == "cuda":
@@ -364,18 +366,20 @@ def main() -> None:
         aggregated[name] = agg
 
     # Print summary table.
-    print("\n" + "=" * 120)
+    print("\n" + "=" * 132)
     print(f"{'Solver':<12} {'time_ms':<20} {'iters':<16} {'obj':<18} "
-          f"{'rec_err':<18} {'row_err':<12} {'trace_err':<14} {'max_off':<12}")
-    print("=" * 120)
+          f"{'rec_err':<18} {'row_err':<12} {'trace_err':<14} {'max_off':<12} {'mem_mb':<14}")
+    print("=" * 132)
     for name, m in aggregated.items():
         time_str = f"{m['time_mean_ms_mean']:.2f} ± {m['time_mean_ms_std']:.2f}"
         iter_str = f"{m['iters_mean']:.1f} ± {m['iters_std']:.1f}"
         obj_str = f"{m['objective_mean']:.4f} ± {m['objective_std']:.4f}"
         rec_str = f"{m['recovery_error_mean']:.4f} ± {m['recovery_error_std']:.4f}"
+        mem_str = f"{m['memory_mb_mean']:.4f} ± {m['memory_mb_std']:.4f}"
         print(f"{name:<12} {time_str:<20} {iter_str:<16} {obj_str:<18} {rec_str:<18} "
-              f"{m['row_sum_max_abs_mean']:<12.2e} {m['trace_err_mean']:<14.2e} {m['max_off_mean']:<12.2e}")
-    print("=" * 120)
+              f"{m['row_sum_max_abs_mean']:<12.2e} {m['trace_err_mean']:<14.2e} {m['max_off_mean']:<12.2e} "
+              f"{mem_str:<14}")
+    print("=" * 132)
 
     if args.save:
         sim_path = os.path.join(

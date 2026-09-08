@@ -1,6 +1,7 @@
 """Tests for metric utilities."""
 
 import numpy as np
+import pytest
 import torch
 from pygsp.graphs import Graph
 
@@ -12,6 +13,7 @@ from core.metrics import (
     evaluate_laplacian,
     evaluate_laplacian_weighted,
     compute_scores,
+    get_object_memory,
 )
 
 
@@ -81,6 +83,21 @@ def test_evaluate_adjacency_weighted_partial():
     np.testing.assert_allclose(metrics["precision"], 1.0 / 1.1, rtol=1e-6)
     np.testing.assert_allclose(metrics["recall"], 1.0 / 2.0, rtol=1e-6)
     assert 0.0 < metrics["f1_score"] < 1.0
+
+
+def test_get_object_memory():
+    class Foo:
+        def __init__(self):
+            self.a = torch.zeros(100, 100)            # 40000 B
+            self.b = np.zeros((50, 50))               # 20000 B
+            self.c = torch.sparse_coo_tensor(         # values + indices
+                indices=torch.tensor([[0, 1], [1, 0]]),
+                values=torch.zeros(2),
+            )
+            self.d = 3.14                             # not a tensor: 0 B
+
+    expected = (100 * 100 * 4 + 50 * 50 * 8 + 2 * 4 + 4 * 8) / (1024.0 ** 2)
+    assert get_object_memory(Foo()) == pytest.approx(expected, rel=1e-9)
 
 
 def test_evaluate_laplacian_weighted():
