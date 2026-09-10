@@ -354,7 +354,7 @@ class SmoothRunner(GraphLearningRunner):
                             default="activeset",
                             help="Inner solver for the Laplacian projection")
         parser.add_argument("--admm_mode", type=str,
-                            choices=["normal", "optimized"], default="optimized")
+                            choices=["naive", "optimized"], default="optimized")
         parser.add_argument("--alpha", type=float, default=1e-3)
         parser.add_argument("--beta", type=float, default=100)
         parser.add_argument("--tol", type=float, default=1e-5)
@@ -369,7 +369,7 @@ class SmoothRunner(GraphLearningRunner):
                             help="Compute inner metrics every N inner iterations")
 
     def setup(self) -> None:
-        from core.graph_learn import ProjADMM, ProjIPM, LaplacianActiveSet
+        from core.graph_learn import ProjADMM, ProjIPM, ProjActiveSet
 
         self.alpha = self.args.alpha
         self.beta = self.args.beta
@@ -398,7 +398,7 @@ class SmoothRunner(GraphLearningRunner):
                 device=self.device,
             )
         elif self.args.solver == "activeset":
-            self.graph_learner = LaplacianActiveSet(
+            self.graph_learner = ProjActiveSet(
                 dim=self.dim,
                 L=L0,
                 vol=graph_vol,
@@ -510,7 +510,7 @@ class PolyRunner(GraphLearningRunner):
     @classmethod
     def add_args(cls, parser: Any) -> None:
         parser.add_argument("--admm_mode", type=str,
-                            choices=["normal", "optimized"], default="optimized")
+                            choices=["naive", "optimized"], default="optimized")
         parser.add_argument("--deg", type=int, default=2)
         parser.add_argument("--alpha", type=float, default=4)
         parser.add_argument("--tol", type=float, default=1e-2)

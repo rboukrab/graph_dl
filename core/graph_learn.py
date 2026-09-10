@@ -10,6 +10,19 @@ from torch.autograd import Variable
 from core.utils import duplication_matrix
 from torch.nn.functional import softshrink
 
+
+def _dense_equality_matrix(dim: int, m: int, row_pos: torch.Tensor,
+                           diag_pos: torch.Tensor, device: str) -> torch.Tensor:
+    """Dense (dim+1) x m equality matrix A (row sums + trace = vol).
+
+    Built by scatter from the index structure instead of converting the sparse
+    tensor with ``to_dense`` (which is unreliable on some sparse-tensor builds).
+    """
+    A_dense = torch.zeros(dim + 1, m, dtype=torch.float64, device=device)
+    A_dense[:dim].scatter_(1, row_pos, 1.0)
+    A_dense[dim, diag_pos] = 1.0
+    return A_dense
+
 class BCD:
 
     def __init__(
@@ -652,26 +665,31 @@ class ProjADMM:
         self.s = self.dim - self.delta1 * self.dim + self.delta2 * (self.dim ** 2)
         self.th = self.P.values()
 
-        if self.mode == 'normal':
-            self.M = torch.hstack((
-                torch.vstack((
-                    torch.sparse_coo_tensor(
-                        indices=self.P.indices(),
-                        values=torch.tensor(
-                            self.P.values() + self.rho,
-                            device=self.device
-                        ).float()
-                    ),
-                    self.A)
-                ),
-                torch.vstack((
-                    self.A.T,
-                    torch.sparse_coo_tensor(
-                        size=(self.dim + 1, self.dim + 1),
-                        device=self.device)
-                ))
-            ))
-            self.M = self.M.to_dense()
+        if self.mode == 'naive':
+            # Dense KKT matrix M = [[P + rho I, A^T], [A, 0]], built
+            # analytically (to_dense on sparse tensors is unreliable on some
+            # sparse-tensor builds).
+            m = int(self.dim * (self.dim + 1) / 2)
+            diag_pos = torch.tensor(
+                [i * (2 * dim - i + 1) // 2 for i in range(dim)],
+                dtype=torch.long, device=device
+            )
+            row_pos = torch.zeros((dim, dim), dtype=torch.long, device=device)
+            for i in range(dim):
+                for j in range(dim):
+                    pos = (i * dim + j - i * (i + 1) // 2 if j >= i
+                           else j * dim + i - j * (j + 1) // 2)
+                    row_pos[i, j] = pos
+            A_dense = _dense_equality_matrix(
+                dim, m, row_pos, diag_pos, device
+            ).to(dtype=torch.float32)
+            P_full = torch.full((m,), 2.0, dtype=torch.float32, device=device)
+            P_full[diag_pos] = 1.0
+            self.M = torch.zeros((m + dim + 1, m + dim + 1),
+                                 dtype=torch.float32, device=device)
+            self.M[:m, :m] = torch.diag(P_full + self.rho)
+            self.M[:m, m:] = A_dense.T
+            self.M[m:, :m] = A_dense
 
     @staticmethod
     def pos_threshold(x, gamma):
@@ -699,7 +717,7 @@ class ProjADMM:
 
         # Projection step
         self.iter = 0
-        if self.mode == 'normal':
+        if self.mode == 'naive':
             for _ in range(max_iter):
                 if max_time is not None and (time.perf_counter() - t0) > max_time:
                     break
@@ -755,6 +773,10 @@ class ProjIPM:
     ``D`` and ``A`` are kept as sparse COO tensors (constructed the same way
     as in ``ProjADMM``) and the inner Newton step uses sparse matrix-vector
     products.  This avoids building the dense duplication matrix in memory.
+
+    With ``mode='naive'`` the inner Newton step instead assembles the dense
+    KKT system ``[[H, A^T], [A, 0]]`` and solves it directly with
+    ``torch.linalg.solve``, mirroring the naive mode of ``ProjADMM``.
     """
 
     def __init__(
@@ -769,10 +791,12 @@ class ProjIPM:
             max_inner_iter: int = 100,
             alpha: float = 0.25,
             beta_ls: float = 0.5,
+            mode: str = 'optimized',
             device: str = 'cpu'
     ):
         self.device = device
         self.dim = dim
+        self.mode = mode
         self.vol = float(vol)
         self.t = float(t0)
         self.mu = float(mu)
@@ -857,6 +881,13 @@ class ProjIPM:
         self._off_i = torch.tensor(off_i, dtype=torch.long, device=device)
         self._off_j = torch.tensor(off_j, dtype=torch.long, device=device)
         self._off_pos = torch.tensor(off_pos, dtype=torch.long, device=device)
+
+        # Dense equality matrix for the 'naive' mode (direct KKT solves).
+        self.A_dense = None
+        if mode == 'naive':
+            self.A_dense = _dense_equality_matrix(
+                self.dim, self.m, self._row_pos, self._diag_pos, device
+            )
 
         # Precompute A A^T (dense, small) for the initial projection.
         self._AAT = self._build_AAT(dim, device)
@@ -951,42 +982,58 @@ class ProjIPM:
                 H_diag[self.off_mask] = H_diag[self.off_mask] + 1.0 / (off * off)
                 g[self.off_mask] = g[self.off_mask] + 1.0 / (-off)
 
-                H_inv = 1.0 / H_diag
+                if self.mode == 'naive':
+                    # Solve the dense KKT system directly:
+                    # [[H, A^T], [A, 0]] [delta_l; nu] = [-g; 0].
+                    m = self.m
+                    kkt = torch.zeros((m + self.dim + 1, m + self.dim + 1),
+                                      dtype=torch.float64, device=self.device)
+                    kkt[:m, :m] = torch.diag(H_diag)
+                    kkt[:m, m:] = self.A_dense.T
+                    kkt[m:, :m] = self.A_dense
+                    rhs = torch.cat((
+                        -g,
+                        torch.zeros(self.dim + 1, dtype=torch.float64,
+                                    device=self.device)
+                    ))
+                    delta_l = torch.linalg.solve(kkt, rhs)[:m]
+                else:
+                    H_inv = 1.0 / H_diag
 
-                # Build the Schur complement S = -A H^{-1} A^T directly from
-                # the precomputed index structure (no dense/sparse matmul).
-                S = torch.zeros((self.dim + 1, self.dim + 1),
-                                dtype=torch.float64, device=self.device)
-                arange_d = torch.arange(self.dim, device=self.device)
-                S[arange_d, arange_d] = -H_inv[self._row_pos].sum(dim=1)
-                S[self._off_i, self._off_j] = -H_inv[self._off_pos]
-                S[self._off_j, self._off_i] = -H_inv[self._off_pos]
-                S[:self.dim, self.dim] = -H_inv[self._diag_pos]
-                S[self.dim, :self.dim] = -H_inv[self._diag_pos]
-                S[self.dim, self.dim] = -H_inv[self._diag_pos].sum()
+                    # Build the Schur complement S = -A H^{-1} A^T directly from
+                    # the precomputed index structure (no dense/sparse matmul).
+                    S = torch.zeros((self.dim + 1, self.dim + 1),
+                                    dtype=torch.float64, device=self.device)
+                    arange_d = torch.arange(self.dim, device=self.device)
+                    S[arange_d, arange_d] = -H_inv[self._row_pos].sum(dim=1)
+                    S[self._off_i, self._off_j] = -H_inv[self._off_pos]
+                    S[self._off_j, self._off_i] = -H_inv[self._off_pos]
+                    S[:self.dim, self.dim] = -H_inv[self._diag_pos]
+                    S[self.dim, :self.dim] = -H_inv[self._diag_pos]
+                    S[self.dim, self.dim] = -H_inv[self._diag_pos].sum()
 
-                S_inv = torch.from_numpy(
-                    np.linalg.inv(S.detach().cpu().numpy())
-                ).to(device=self.device, dtype=torch.float64)
+                    S_inv = torch.from_numpy(
+                        np.linalg.inv(S.detach().cpu().numpy())
+                    ).to(device=self.device, dtype=torch.float64)
 
-                # A H^{-1} g computed from the sparse structure of A.
-                Hg = H_inv * g
-                Ahinv_g = torch.zeros(self.dim + 1, dtype=torch.float64,
-                                      device=self.device)
-                Ahinv_g[:self.dim] = Hg[self._row_pos].sum(dim=1)
-                Ahinv_g[self.dim] = Hg[self._diag_pos].sum()
-                temp = S_inv @ Ahinv_g
+                    # A H^{-1} g computed from the sparse structure of A.
+                    Hg = H_inv * g
+                    Ahinv_g = torch.zeros(self.dim + 1, dtype=torch.float64,
+                                          device=self.device)
+                    Ahinv_g[:self.dim] = Hg[self._row_pos].sum(dim=1)
+                    Ahinv_g[self.dim] = Hg[self._diag_pos].sum()
+                    temp = S_inv @ Ahinv_g
 
-                # A^T temp, again using the structure of A.
-                AT_temp = torch.zeros(self.m, dtype=torch.float64,
-                                      device=self.device)
-                AT_temp[self._off_pos] = temp[self._off_i] + temp[self._off_j]
-                AT_temp[self._diag_pos] = temp[:self.dim] + temp[self.dim]
+                    # A^T temp, again using the structure of A.
+                    AT_temp = torch.zeros(self.m, dtype=torch.float64,
+                                          device=self.device)
+                    AT_temp[self._off_pos] = temp[self._off_i] + temp[self._off_j]
+                    AT_temp[self._diag_pos] = temp[:self.dim] + temp[self.dim]
 
-                # Newton direction for the equality-constrained centering step.
-                # delta_l = -H^{-1} g + H^{-1} A^T (R g), with
-                # R = -S^{-1} A H^{-1}, so A^T (R g) = -A^T temp.
-                delta_l = -H_inv * g - H_inv * AT_temp
+                    # Newton direction for the equality-constrained centering step.
+                    # delta_l = -H^{-1} g + H^{-1} A^T (R g), with
+                    # R = -S^{-1} A H^{-1}, so A^T (R g) = -A^T temp.
+                    delta_l = -H_inv * g - H_inv * AT_temp
                 omega_sq = (delta_l * H_diag * delta_l).sum()
 
                 s = 1.0
@@ -1019,7 +1066,7 @@ class ProjIPM:
 
 
 
-class LaplacianActiveSet:
+class ProjActiveSet:
     """Laplacian projection using a dual active-set (Goldfarb--Idnani) method.
 
     Solves
@@ -1033,6 +1080,10 @@ class LaplacianActiveSet:
     currently active inequality constraints.  Adding or removing an active
     inequality is performed with O((D+|W|)^2) rank-1 updates of N^{-1} rather
     than refactorizing the working-set KKT system.
+
+    With ``mode='naive'`` the working-set KKT system is instead assembled
+    densely and solved directly with ``torch.linalg.solve`` at every update,
+    mirroring the naive modes of ``ProjADMM`` and ``ProjIPM``.
     """
 
     def __init__(
@@ -1041,10 +1092,12 @@ class LaplacianActiveSet:
             L: torch.Tensor = None,
             vol: float = 100.,
             max_iter: int = None,
+            mode: str = 'optimized',
             device: str = 'cpu'
     ):
         self.device = device
         self.dim = dim
+        self.mode = mode
         self.vol = float(vol)
         self.D_minus = int(dim * (dim - 1) / 2)
         if max_iter is None:
@@ -1128,6 +1181,17 @@ class LaplacianActiveSet:
         # Precompute N^{-1} for the equality-only working set.
         self._N_eq_inv = self._build_N_eq_inv(dim, device)
 
+        # Dense constraint matrices for the 'naive' mode (direct KKT solves).
+        if mode == 'naive':
+            self.A_dense = _dense_equality_matrix(
+                self.dim, self.m, self._row_pos, self._diag_pos, device
+            )
+            self.B_dense = torch.zeros(self.D_minus, self.m,
+                                       dtype=torch.float64, device=device)
+            edge_idx = torch.arange(self.D_minus, dtype=torch.long,
+                                    device=device)
+            self.B_dense[edge_idx, self.off_positions] = 1.0
+
         # Initial Laplacian.
         if L is not None:
             self.L = L.to(device=device, dtype=torch.float32)
@@ -1172,6 +1236,52 @@ class LaplacianActiveSet:
         p1[self._off_i[edge_idx]] = val
         p1[self._off_j[edge_idx]] = val
         return p1
+
+    def _solve_wkkt(self, W: list, g: torch.Tensor) -> tuple:
+        """Solve the working-set KKT system directly (naive mode).
+
+        Builds N = M diag(P0^{-1}) M^T for M = [A; B_W] and solves
+        N y = M g - b_ext, then recovers the primal
+        l = g - P0^{-1} M^T y.
+        """
+        if W:
+            idx = torch.tensor(W, dtype=torch.long, device=self.device)
+            M = torch.vstack((self.A_dense, self.B_dense[idx]))
+        else:
+            M = self.A_dense
+        N = (M * self.P0_inv.unsqueeze(0)) @ M.T
+        b_ext = torch.zeros(M.shape[0], dtype=torch.float64,
+                            device=self.device)
+        b_ext[:self.dim + 1] = self.b
+        y = torch.linalg.solve(N, M @ g - b_ext)
+        l = g - self.P0_inv * (M.T @ y)
+        return y, l
+
+    def _add_edge_naive(
+        self,
+        edge_idx: int,
+        W: list,
+        y: torch.Tensor,
+        l: torch.Tensor,
+        g: torch.Tensor
+    ) -> tuple:
+        """Naive update: refactorize the KKT system after adding an edge."""
+        W = W + [edge_idx]
+        y, l = self._solve_wkkt(W, g)
+        return W, y, None, l
+
+    def _remove_edge_naive(
+        self,
+        j: int,
+        W: list,
+        y: torch.Tensor,
+        l: torch.Tensor,
+        g: torch.Tensor
+    ) -> tuple:
+        """Naive update: refactorize the KKT system after removing an edge."""
+        W = W[:j] + W[j + 1:]
+        y, l = self._solve_wkkt(W, g)
+        return W, y, None, l
 
     def _add_edge(
         self,
@@ -1310,7 +1420,10 @@ class LaplacianActiveSet:
         prev_l = getattr(self, "l", None)
         if prev_W is not None and prev_l is not None and len(prev_W) > 0:
             try:
-                A_dense = self.A.to_dense()
+                A_dense = _dense_equality_matrix(
+                    self.dim, self.m, self._row_pos, self._diag_pos,
+                    self.device
+                )
                 rows = [A_dense]
                 for edge_idx in prev_W:
                     row = torch.zeros(self.m, dtype=torch.float64,
@@ -1336,7 +1449,11 @@ class LaplacianActiveSet:
 
         if not warm_started:
             # Equality-constrained minimizer (cold start).
-            y = self._N_eq_inv @ (self._A_mul_vec(g) - self.b)
+            if self.mode == 'naive':
+                N_eq = (self.A_dense * self.P0_inv.unsqueeze(0)) @ self.A_dense.T
+                y = torch.linalg.solve(N_eq, self._A_mul_vec(g) - self.b)
+            else:
+                y = self._N_eq_inv @ (self._A_mul_vec(g) - self.b)
             l = g - self.P0_inv * self._A_T_mul_vec(y)
             W = []
             N_inv = self._N_eq_inv.clone()
@@ -1366,9 +1483,14 @@ class LaplacianActiveSet:
                 feasible_off = off_vals[feasible_idx]
                 if feasible_off.numel() > 0 and feasible_off.max().item() > 0:
                     i_star = int(feasible_idx[feasible_off.argmax()])
-                    W, y, N_inv, l = self._add_edge(
-                        i_star, W, y, N_inv, l, g
-                    )
+                    if self.mode == 'naive':
+                        W, y, N_inv, l = self._add_edge_naive(
+                            i_star, W, y, l, g
+                        )
+                    else:
+                        W, y, N_inv, l = self._add_edge(
+                            i_star, W, y, N_inv, l, g
+                        )
                     continue
 
             # Remove the active edge with the most negative multiplier.
@@ -1376,9 +1498,14 @@ class LaplacianActiveSet:
                 active_mult = y[self.dim + 1:]
                 j_star = int(active_mult.argmin())
                 if float(active_mult[j_star]) < -1e-12:
-                    W, y, N_inv, l = self._remove_edge(
-                        j_star, W, y, N_inv, l, g
-                    )
+                    if self.mode == 'naive':
+                        W, y, N_inv, l = self._remove_edge_naive(
+                            j_star, W, y, l, g
+                        )
+                    else:
+                        W, y, N_inv, l = self._remove_edge(
+                            j_star, W, y, N_inv, l, g
+                        )
                     continue
 
             # KKT conditions satisfied.

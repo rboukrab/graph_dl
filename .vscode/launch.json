@@ -505,7 +505,7 @@
                 "--n_iters",
                 "100",
                 "--mode",
-                "normal"
+                "naive"
             ],
             "justMyCode": false
         },

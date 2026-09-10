@@ -2,7 +2,7 @@
 
 The benchmark corrupts a valid combinatorial Laplacian with edge noise using
 :class:`core.datasets.NoisyLaplacianDataset` and measures how well each
-projection solver (ProjIPM, LaplacianActiveSet, ProjADMM) recovers
+projection solver (ProjIPM, ProjActiveSet, ProjADMM) recovers
 a valid Laplacian.  Metrics include wall time, inner iterations, constraint
 violations, objective value, and recovery error relative to the ground-truth
 Laplacian.
@@ -26,7 +26,7 @@ import torch
 
 from core.config import ensure_log_dir
 from core.datasets import NoisyLaplacianDataset
-from core.graph_learn import LaplacianActiveSet, ProjIPM, ProjADMM
+from core.graph_learn import ProjActiveSet, ProjIPM, ProjADMM
 from core.metrics import evaluate_laplacian_weighted, get_object_memory
 
 
@@ -42,7 +42,7 @@ SOLVERS = {
         "iters": lambda solver: int(getattr(solver, "iter", -1)),
     },
     "activeset": {
-        "class": LaplacianActiveSet,
+        "class": ProjActiveSet,
         "kwargs": {},
         "call": lambda solver, H, tol, max_iter, max_time=None, callback=None: solver.forward(
             H, max_iter=max_iter, tolerance=tol, callback=callback, max_time=max_time

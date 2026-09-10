@@ -141,12 +141,12 @@ Benchmarks the inner `L`-update step of polynomial graph learning using `ProjADM
 
 ```bash
 python benchmark_l_update.py --dim 100 --deg 2 --alpha 4 \
-  --n_samples 1000 --n_iters 100 --mode normal
+  --n_samples 1000 --n_iters 100 --mode naive
 ```
 
 ### `benchmark_projection.py`
 
-Compares the three Laplacian projection solvers (`ProjIPM`, `LaplacianActiveSet`, `ProjADMM`) on the same realistic `H_k` taken from `SmoothRunner`.
+Compares the three Laplacian projection solvers (`ProjIPM`, `ProjActiveSet`, `ProjADMM`) on the same realistic `H_k` taken from `SmoothRunner`.
 
 ```bash
 python benchmark_projection.py --dim 20 --n_samples 100000 --alpha 1e-2 --beta 10 --n_reps 10

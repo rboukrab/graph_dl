@@ -17,7 +17,7 @@ parser.add_argument('--device', type=str, default=None)
 parser.add_argument('--dim', type=int, default=100, help='Graph dimension')
 parser.add_argument('--deg', type=int, default=2, help='Laplacian polynomial degree')
 parser.add_argument('--alpha', type=float, default=4)
-parser.add_argument('--mode', type=str, choices=['normal', 'optimized'], default='normal',
+parser.add_argument('--mode', type=str, choices=['naive', 'optimized'], default='naive',
                     help='ADMM computing method')
 parser.add_argument('--n_samples', type=int, default=1000, help='Number of samples for covariance')
 parser.add_argument('--n_iters', type=int, default=100, help='Number of benchmark iterations')

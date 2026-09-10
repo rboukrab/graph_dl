@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from core.graph_learn import (
-    BCD, GAMA, GLAMA, StationaryADMM, ProjADMM, LaplacianActiveSet,
+    BCD, GAMA, GLAMA, StationaryADMM, ProjADMM, ProjIPM, ProjActiveSet,
 )
 from tests.conftest import cpu_lapack_available
 
@@ -49,6 +49,41 @@ def test_stationary_admm_runs_one_iteration():
     assert learner.L.shape == (dim, dim)
 
 
+def test_proj_ipm_runs_one_iteration():
+    dim = 5
+    learner = ProjIPM(dim=dim, vol=float(dim), device="cpu")
+    F = torch.randn(dim, dim, device="cpu")
+    learner.forward(F_t=F, tolerance=1e-3, max_iter=2)
+    assert learner.L.shape == (dim, dim)
+
+
+@pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
+def test_proj_active_set_naive_matches_optimized():
+    dim = 5
+    F = torch.randn(dim, dim, device="cpu")
+    F = (F + F.T) / 2
+    opt = ProjActiveSet(dim=dim, vol=float(dim), device="cpu")
+    opt.forward(F_t=F)
+    naive = ProjActiveSet(dim=dim, vol=float(dim), mode="naive", device="cpu")
+    naive.forward(F_t=F)
+    rel_diff = torch.norm(opt.L - naive.L) / torch.norm(opt.L)
+    assert rel_diff < 1e-6
+    assert naive.W == opt.W
+
+
+@pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
+def test_proj_ipm_naive_matches_optimized():
+    dim = 5
+    F = torch.randn(dim, dim, device="cpu")
+    F = (F + F.T) / 2
+    opt = ProjIPM(dim=dim, vol=float(dim), device="cpu")
+    opt.forward(F_t=F, tolerance=1e-6, max_iter=50)
+    naive = ProjIPM(dim=dim, vol=float(dim), mode="naive", device="cpu")
+    naive.forward(F_t=F, tolerance=1e-6, max_iter=50)
+    rel_diff = torch.norm(opt.L - naive.L) / torch.norm(opt.L)
+    assert rel_diff < 1e-3
+
+
 def test_proj_admm2_runs_one_iteration():
     dim = 5
     learner = ProjADMM(dim=dim, mode="optimized", device="cpu")
@@ -59,7 +94,7 @@ def test_proj_admm2_runs_one_iteration():
 
 def test_laplacian_active_set_runs_and_is_laplacian():
     dim = 5
-    learner = LaplacianActiveSet(dim=dim, vol=float(dim), device="cpu")
+    learner = ProjActiveSet(dim=dim, vol=float(dim), device="cpu")
     F = torch.randn(dim, dim, device="cpu")
     F = (F + F.T) / 2
     learner.forward(F_t=F)
