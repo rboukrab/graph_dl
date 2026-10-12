@@ -513,17 +513,38 @@ class PolyRunner(GraphLearningRunner):
                             choices=["naive", "optimized", "minres", "cudss"], default="optimized")
         parser.add_argument("--deg", type=int, default=2)
         parser.add_argument("--alpha", type=float, default=4)
+        parser.add_argument("--penalty", type=str, choices=["mcp", "l1"], default="mcp",
+                            help="Sparsity penalty on the off-diagonal entries of L. Note that the l1 norm is "
+                                 "constant (= vol) over the set of Laplacians with fixed volume, so it does not "
+                                 "change the solution of the L-update; MCP does promote sparsity.")
+        parser.add_argument("--mcp_gamma", type=float, default=3.0,
+                            help="MCP concavity parameter (> 1); entries with magnitude above gamma*alpha are not "
+                                 "penalized")
+        parser.add_argument("--eta_scale", type=float, default=1.0,
+                            help="Outer ADMM penalty of the L-update, as a multiple of the step constant b_t")
         parser.add_argument("--tol", type=float, default=1e-2)
-        parser.add_argument("--max_iter", type=int, default=10)
+        parser.add_argument("--max_iter", type=int, default=100)
 
     def extra_stat_metric_names(self) -> list:
         return ["filterr"]
+
+    @staticmethod
+    def firm_threshold(y: torch.Tensor, lam: float, gamma: float, tau: float) -> torch.Tensor:
+        """Proximal operator of lam * MCP_gamma with quadratic weight tau, i.e.
+        argmin_x lam * MCP_gamma(x) + tau / 2 * (x - y)^2, element-wise (requires gamma * tau > 1)."""
+        abs_y = y.abs()
+        shrunk = torch.sign(y) * (abs_y - lam / tau) / (1 - 1 / (gamma * tau))
+        out = torch.where(abs_y > gamma * lam, y, shrunk)
+        return torch.where(abs_y <= lam / tau, torch.zeros_like(y), out)
 
     def setup(self) -> None:
         from core.graph_learn import ProjADMM
 
         self.deg = self.args.deg
         self.alpha = self.args.alpha
+        self.penalty = self.args.penalty
+        self.mcp_gamma = self.args.mcp_gamma
+        self.eta_scale = self.args.eta_scale
         self.tol = self.args.tol
         self.max_iter = self.args.max_iter
         self.h = self.dataset.h if self.data_set == "stat" else None
@@ -622,21 +643,32 @@ class PolyRunner(GraphLearningRunner):
         idx_L = 0
         while not found and idx_L < 10:
             F_t = b_t * L_old - grad_h_L
-            rho = 1e-3
+            # Outer ADMM for the proximal step (Algorithm "Laplacian update via ADMM"):
+            #   Phi   = prox of the sparsity penalty (shrinkage step)
+            #   Omega = projection of Phi - U onto the set of Laplacians (ALP)
+            #   U     = U + Omega - Phi (scaled dual variable)
+            # The scaled dual variable depends on eta, which is tied to b_t, so the
+            # ADMM state is restarted from L_old at every line-search trial.
+            eta = self.eta_scale * b_t
+            tau = b_t + eta
+            self.Omega = L_old.detach().clone()
+            self.U = torch.zeros_like(L_old)
             for _ in range(self.max_iter):
-                K = F_t + rho * (self.Omega + self.U)
-                self.Phi = (softshrink(K, self.alpha) * self.O + K * self.I) / (
-                    b_t + rho
-                )
+                K = F_t + eta * (self.Omega + self.U)
+                if self.penalty == "mcp":
+                    off = self.firm_threshold(K / tau, self.alpha, self.mcp_gamma, tau)
+                else:
+                    off = softshrink(K, self.alpha) / tau
+                self.Phi = off * self.O + (K / tau) * self.I
                 self.graph_learner.forward(
-                    F_t=-(self.Phi + self.U), tolerance=1e-5, max_iter=1000
+                    F_t=self.Phi - self.U, tolerance=1e-5, max_iter=1000
                 )
                 self.Omega = self.graph_learner.L.detach().clone()
                 self.U += self.Omega - self.Phi
                 err = torch.linalg.norm(self.Phi - self.Omega)
                 if err < self.tol:
                     break
-            L_new = self.graph_learner.L.detach().clone()
+            L_new = self.Omega.detach().clone()
 
             self.Lp[1] = L_new.detach().clone()
             for p in range(2, self.deg + 1):
@@ -659,7 +691,9 @@ class PolyRunner(GraphLearningRunner):
                 idx_L += 1
 
     def get_graph_matrix(self) -> torch.Tensor:
-        return self.Phi
+        # Accepted iterate, which belongs to the set of Laplacians (Omega), rather
+        # than the shrinkage-step variable Phi.
+        return self.graph_learner.L
 
     def extra_stat_metrics(self, matrix: torch.Tensor) -> Dict[str, float]:
         if self.data_set != "stat" or self.h is None:

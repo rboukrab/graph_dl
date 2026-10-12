@@ -691,31 +691,6 @@ class ProjADMM:
             values=1. / (self.P.values() + self.rho)
         ).to(device)
 
-        # Dense equality matrix A (built manually to avoid the unreliable
-        # ``torch.sparse.Tensor.to_dense()`` implementation on this PyTorch
-        # build).  It is only (dim+1) x m, so keeping it dense is cheap and
-        # lets us pre-compute (A R^{-1} A^T)^{-1} exactly.
-        m = dim * (dim + 1) // 2
-        A_dense = torch.zeros((dim + 1, m), dtype=torch.float64, device=device)
-        for i in range(dim):
-            for j in range(dim):
-                if j >= i:
-                    pos = i * dim + j - i * (i + 1) // 2
-                else:
-                    pos = j * dim + i - j * (j + 1) // 2
-                A_dense[i, pos] = 1.0
-        for i in range(dim):
-            A_dense[dim, i * (2 * dim - i + 1) // 2] = 1.0
-
-        Rinv_c = self.Rinv.coalesce()
-        Rinv_dense = torch.zeros(m, dtype=torch.float64, device=device)
-        Rinv_dense[Rinv_c.indices()[1]] = Rinv_c.values().to(torch.float64)
-
-        ARinvAT = (A_dense * Rinv_dense) @ A_dense.T
-        self._A_Rinv_AT_inv = torch.from_numpy(
-            np.linalg.inv(ARinvAT.detach().cpu().numpy())
-        ).to(device=device, dtype=torch.float32)
-
         # Matrix B
         index_ineq = torch.tensor([
             [i for i in range(int(dim * (dim - 1) / 2))],
@@ -743,14 +718,17 @@ class ProjADMM:
         self.z = torch.zeros(int(self.dim * (self.dim + 1) / 2), device=device)
         self.v = torch.zeros(int(self.dim * (self.dim + 1) / 2), device=device)
 
-        # Constants
-        self.delta1 = ((2 + self.rho)**2 - self.dim * (1 + self.rho) * (2 + self.rho)) / (self.dim * (self.dim + self.rho) * ((2 * self.dim + self.rho) * (1 + self.rho) - (2 + self.rho)))
-        #self.delta1 = (2 + self.rho) / (self.dim * (1 + self.rho) - self.rho)
-        self.delta2 = -((2 + self.rho) * (1 + self.rho)) / (self.dim * ((2 * self.dim + self.rho) * (1 + self.rho) - (2 + self.rho)))
-        # self.delta2 = (1 + self.rho) * self.delta1 / (2 * self.dim * (1 + self.rho) - self.rho)
-        self.delta3 = ((2 * self.dim + self.rho) * (1 + self.rho)**2) / (self.dim * ((2 * self.dim + self.rho) * (1 + self.rho) - (2 + self.rho)))
-        # self.delta3 = self.delta1 - self.delta2 * self.dim
-        self.s = self.dim - self.delta1 * self.dim + self.delta2 * (self.dim ** 2)
+        # Closed-form inverse of the Schur complement A R^{-1} A^T, where R = P + rho I has entries
+        # u = 1 + rho (diagonal of L) and v = 2 + rho (off-diagonal of L):
+        #   (A R^{-1} A^T)^{-1} = [[I / a + delta1 11^T, delta2 1], [delta2 1^T, delta3]]
+        u, v = 1 + self.rho, 2 + self.rho
+        m2 = 2 * self.dim * (self.dim - 1)
+        kappa1 = v + (self.dim - 2) * u
+        kappa2 = v + 2 * (self.dim - 1) * u
+        self.a_inv = u * v / kappa1
+        self.delta1 = v * (v * kappa1 - m2 * u ** 2) / (m2 * kappa1 * kappa2)
+        self.delta2 = -v / m2
+        self.delta3 = kappa2 / m2
         self.th = self.P.values()
 
         if self.mode == 'naive':
@@ -862,6 +840,14 @@ class ProjADMM:
 
         return torch.minimum(x, torch.tensor(0)) + torch.maximum(x, gamma)
 
+    def _schur_inv_apply(self, s: torch.Tensor) -> torch.Tensor:
+        """Apply (A R^{-1} A^T)^{-1} to s in O(D) operations using its closed form."""
+        s1, s2 = s[:self.dim], s[self.dim]
+        sum_s1 = s1.sum()
+        t1 = self.a_inv * s1 + (self.delta1 * sum_s1 + self.delta2 * s2)
+        t2 = self.delta2 * sum_s1 + self.delta3 * s2
+        return torch.cat((t1, t2.reshape(1)))
+
     def forward(self,
         F_t: torch.FloatTensor,
         # delta: float,
@@ -918,10 +904,7 @@ class ProjADMM:
                 l_old = self.l.detach().clone()
                 r = q + self.rho * (self.z + self.v)
                 s = self.A @ self.Rinv @ r - self.b
-                # Dual variable update using the precomputed exact inverse of
-                # A R^{-1} A^T (the previous analytic formula did not match the
-                # true inverse, which left equality constraints unsatisfied).
-                t = self._A_Rinv_AT_inv @ s
+                t = self._schur_inv_apply(s)
                 self.l = self.Rinv @ (r - self.A.T @ t)
                 w = self.l - self.v
                 self.z[self.idx_on] = w[self.idx_on]
