@@ -1,7 +1,7 @@
 """Shared configuration helpers for experiment naming and paths."""
 
 import os
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 LOG_DIR = "logs"
 
@@ -22,17 +22,24 @@ def gl_experiment_path(
     param_y_name: str,
     param_y: Any,
     seed: int,
+    param_z_name: Optional[str] = None,
+    param_z: Any = None,
 ) -> str:
     """Build the standard log directory path for graph-learning experiments."""
+    z_suffix = (
+        f"-{param_z_name}{param_z:.3E}" if param_z_name is not None else ""
+    )
     if method == "poly":
         name = (
             f"gl_{method}-{data_set}-dim{dim}-n{n_samples}-"
-            f"{param_x_name}{param_x}-{param_y_name}{param_y:.3E}-s{seed}"
+            f"{param_x_name}{param_x}-{param_y_name}{param_y:.3E}"
+            f"{z_suffix}-s{seed}"
         )
     else:
         name = (
             f"gl_{method}-{data_set}-dim{dim}-n{n_samples}-"
-            f"{param_x_name}{param_x:.3E}-{param_y_name}{param_y:.3E}-s{seed}"
+            f"{param_x_name}{param_x:.3E}-{param_y_name}{param_y:.3E}"
+            f"{z_suffix}-s{seed}"
         )
     return os.path.join(LOG_DIR, name)
 

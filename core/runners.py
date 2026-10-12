@@ -115,7 +115,9 @@ class GraphLearningRunner(ABC):
     # Common experiment infrastructure
     # ------------------------------------------------------------------
     def _build_sim_path(self, param_x_name: str, param_x: Any,
-                        param_y_name: str, param_y: Any) -> str:
+                        param_y_name: str, param_y: Any,
+                        param_z_name: Optional[str] = None,
+                        param_z: Any = None) -> str:
         n_samples = getattr(self.args, "n_samples", 1e6)
         path = gl_experiment_path(
             method=self.method_name,
@@ -127,6 +129,8 @@ class GraphLearningRunner(ABC):
             param_y_name=param_y_name,
             param_y=param_y,
             seed=self.seed,
+            param_z_name=param_z_name,
+            param_z=param_z,
         )
         ensure_log_dir(path)
         return path
@@ -550,7 +554,7 @@ class PolyRunner(GraphLearningRunner):
         self.h = self.dataset.h if self.data_set == "stat" else None
 
         self.sim_path = self._build_sim_path(
-            "deg", self.deg, "alpha", self.alpha
+            "deg", self.deg, "alpha", self.alpha, "eta_scale", self.eta_scale
         )
 
         self.X_train = self.dataset.X.to(self.device)

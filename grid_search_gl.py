@@ -161,6 +161,16 @@ def _add_poly_args(parser: argparse.ArgumentParser) -> None:
         help="log10(max alpha)"
     )
     parser.add_argument("--n_alpha", type=int, default=1, help="Number of alpha values")
+    parser.add_argument(
+        "--min_eta_scale_exp", type=float, default=0.0,
+        help="log10(min eta_scale)"
+    )
+    parser.add_argument(
+        "--max_eta_scale_exp", type=float, default=0.0,
+        help="log10(max eta_scale)"
+    )
+    parser.add_argument("--n_eta_scale", type=int, default=1,
+                        help="Number of eta_scale values")
 
 
 def _add_pgl_args(parser: argparse.ArgumentParser) -> None:
@@ -263,6 +273,8 @@ def main() -> None:
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
+    z_name = None
+    zs = [None]
     if algorithm == "glama":
         xs = np.logspace(args.min_gamma_exp, args.max_gamma_exp, args.n_gamma)
         ys = np.logspace(args.min_delta_exp, args.max_delta_exp, args.n_delta)
@@ -282,7 +294,9 @@ def main() -> None:
     elif algorithm == "poly":
         xs = np.arange(args.min_deg, args.max_deg + 1)
         ys = np.logspace(args.min_alpha_exp, args.max_alpha_exp, args.n_alpha)
-        x_name, y_name = "--deg", "--alpha"
+        zs = np.logspace(args.min_eta_scale_exp, args.max_eta_scale_exp,
+                         args.n_eta_scale)
+        x_name, y_name, z_name = "--deg", "--alpha", "--eta_scale"
     elif algorithm == "pgl":
         xs = np.logspace(args.min_rho_exp, args.max_rho_exp, args.n_rho)
         ys = np.logspace(args.min_eta_exp, args.max_eta_exp, args.n_eta)
@@ -292,45 +306,58 @@ def main() -> None:
 
     param_x_name = x_name.lstrip("-")
     param_y_name = y_name.lstrip("-")
+    param_z_name = z_name.lstrip("-") if z_name is not None else None
     metric_names = ["f1_score", "precision", "recall", "nae", "sp"]
-    fieldnames = [param_x_name, param_y_name, "seed", *metric_names]
+    if algorithm == "poly":
+        metric_names.append("filterr")
+    fieldnames = [param_x_name, param_y_name]
+    if param_z_name is not None:
+        fieldnames.append(param_z_name)
+    fieldnames.extend(["seed", *metric_names])
     grid_rows = []
 
     for x in xs:
         for y in ys:
-            for seed in seeds:
-                x_val = f"{x:.3E}" if algorithm != "poly" else str(int(x))
-                y_val = f"{y:.3E}"
-                cmd = [
-                    *base_cmd,
-                    "--seed",
-                    str(seed),
-                    x_name,
-                    x_val,
-                    y_name,
-                    y_val,
-                ]
-                subprocess.run(cmd, check=False)
+            for z in zs:
+                for seed in seeds:
+                    x_val = f"{x:.3E}" if algorithm != "poly" else str(int(x))
+                    y_val = f"{y:.3E}"
+                    cmd = [
+                        *base_cmd,
+                        "--seed",
+                        str(seed),
+                        x_name,
+                        x_val,
+                        y_name,
+                        y_val,
+                    ]
+                    if z_name is not None:
+                        cmd.extend([z_name, f"{z:.3E}"])
+                    subprocess.run(cmd, check=False)
 
-                sim_path = gl_experiment_path(
-                    method=algorithm,
-                    data_set=args.data_set,
-                    dim=args.dim,
-                    n_samples=args.n_samples,
-                    param_x_name=param_x_name,
-                    param_x=x,
-                    param_y_name=param_y_name,
-                    param_y=y,
-                    seed=seed,
-                )
-                row = {param_x_name: x, param_y_name: y, "seed": seed}
-                for metric in metric_names:
-                    try:
-                        arr = np.load(os.path.join(sim_path, f"{metric}.npy"))
-                        row[metric] = float(arr[-1])
-                    except Exception:
-                        row[metric] = float("nan")
-                grid_rows.append(row)
+                    sim_path = gl_experiment_path(
+                        method=algorithm,
+                        data_set=args.data_set,
+                        dim=args.dim,
+                        n_samples=args.n_samples,
+                        param_x_name=param_x_name,
+                        param_x=x,
+                        param_y_name=param_y_name,
+                        param_y=y,
+                        seed=seed,
+                        param_z_name=param_z_name,
+                        param_z=z,
+                    )
+                    row = {param_x_name: x, param_y_name: y, "seed": seed}
+                    if param_z_name is not None:
+                        row[param_z_name] = z
+                    for metric in metric_names:
+                        try:
+                            arr = np.load(os.path.join(sim_path, f"{metric}.npy"))
+                            row[metric] = float(arr[-1])
+                        except Exception:
+                            row[metric] = float("nan")
+                    grid_rows.append(row)
 
     if args.grid_summary:
         summary_dir = os.path.dirname(args.grid_summary)
