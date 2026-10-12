@@ -2,7 +2,10 @@ import time
 
 import numpy as np
 import torch
-from qpth.qp import QPFunction
+try:
+    from qpth.qp import QPFunction
+except ImportError:  # optional: only the legacy BCD solver needs qpth
+    QPFunction = None
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import splu
 from torch.autograd import Variable
@@ -39,6 +42,11 @@ class BCD:
         self.Phi = torch.diag(1 / torch.diag(self.S))
 
     def forward(self, S_d: torch.FloatTensor, tolerance: float, max_iter: int):
+        if QPFunction is None:
+            raise ImportError(
+                "BCD requires the optional 'qpth' package "
+                "(pip install --no-deps qpth==0.0.16 cvxpy)"
+            )
         for i in range(self.num_nodes):
             P = self.Phi.detach().clone()
             P = torch.vstack((P[:i], P[(i + 1):]))
@@ -552,6 +560,82 @@ class StationaryADMM:
         self.L = l.reshape(self.dim, self.dim).to(self.device)
 
 
+def _minres(matvec, rhs, tol=1e-6, max_iter=None):
+    """MINRES for a single right-hand side of a symmetric system.
+
+    Adapted from ``gpytorch.utils.minres`` (v1.6.0), specialized to one RHS
+    with no shifts and an identity preconditioner. ``matvec`` must implement
+    the symmetric coefficient matrix as a linear operator. Returns the
+    solution and the number of Krylov iterations performed.
+    """
+    n = rhs.shape[0]
+    if max_iter is None:
+        max_iter = n
+    max_iter = min(max_iter, n)
+
+    rhs_norm = torch.linalg.norm(rhs)
+    if rhs_norm < 1e-12:
+        return torch.zeros_like(rhs), 0
+    b = rhs / rhs_norm
+
+    eps = torch.tensor(1e-25, dtype=rhs.dtype, device=rhs.device)
+
+    # Lanczos three-term recurrence (identity preconditioner: z == q).
+    v_prev2 = torch.zeros_like(b)
+    v_prev1 = b.clone()
+    beta_prev = b.new_ones(())
+
+    x = torch.zeros_like(b)
+    search_prev2 = torch.zeros_like(b)
+    search_prev1 = torch.zeros_like(b)
+    scale_prev = b.new_ones(())
+
+    cos_prev2, sin_prev2 = b.new_ones(()), b.new_zeros(())
+    cos_prev1, sin_prev1 = b.new_ones(()), b.new_zeros(())
+
+    n_iter = 0
+    for i in range(max_iter):
+        n_iter = i + 1
+
+        prod = matvec(v_prev1)
+        alpha = torch.dot(prod, v_prev1)
+        v_curr = prod - alpha * v_prev1 - beta_prev * v_prev2
+        beta_curr = torch.linalg.norm(v_curr).clamp_min(eps)
+        v_curr = v_curr / beta_curr
+
+        # QR update of the Lanczos tridiagonal via Givens rotations.
+        subsub_diag = sin_prev2 * beta_prev
+        sub_diag = cos_prev2 * beta_prev
+        diag = alpha * cos_prev1 - sin_prev1 * sub_diag
+        sub_diag = sub_diag * cos_prev1 + sin_prev1 * alpha
+        radius = torch.sqrt(diag * diag + beta_curr * beta_curr).clamp_min(eps)
+        cos_curr = diag / radius
+        sin_curr = beta_curr / radius
+        diag = diag * cos_curr + sin_curr * beta_curr
+
+        # Solution update along the new search direction.
+        scale_curr = -sin_curr * scale_prev
+        scale_prev = cos_curr * scale_prev
+        search_curr = (v_prev1 - sub_diag * search_prev1 - subsub_diag * search_prev2) / diag
+        update = scale_prev * search_curr
+        x = x + update
+
+        if torch.linalg.norm(update) <= tol * torch.linalg.norm(x).clamp_min(eps):
+            break
+
+        # Rotate recurrence state.
+        v_prev2 = v_prev1
+        v_prev1 = v_curr
+        beta_prev = beta_curr
+        cos_prev2, cos_prev1 = cos_prev1, cos_curr
+        sin_prev2, sin_prev1 = sin_prev1, sin_curr
+        search_prev2 = search_prev1
+        search_prev1 = search_curr
+        scale_prev = scale_curr
+
+    return x * rhs_norm, n_iter
+
+
 class ProjADMM:
 
     def __init__(
@@ -560,12 +644,16 @@ class ProjADMM:
             L: torch.Tensor = None,
             vol: float = 100.,
             mode: str = 'optimized',
-            device: str = 'cpu'
+            device: str = 'cpu',
+            minres_tol: float = 1e-6,
+            minres_max_iter: int = None,
     ):
         super().__init__()
 
         self.device = device
         self.mode = mode
+        self.minres_tol = float(minres_tol)
+        self.minres_max_iter = minres_max_iter
         self.rho = 2
 
         self.dim = dim
@@ -691,6 +779,84 @@ class ProjADMM:
             self.M[:m, m:] = A_dense.T
             self.M[m:, :m] = A_dense
 
+        if self.mode in ('minres', 'cudss'):
+            # Index map of the KKT operator [[P + rho I, A^T], [A, 0]],
+            # shared by MINRES (matrix-free matvec) and cudss (sparse
+            # direct): diagonal top-left block plus column pos of A with
+            # nonzeros in rows row1[pos] and row2[pos], the trace constraint
+            # stored as row dim. Index ops are used because sparse COO
+            # transpose/to_dense are unreliable on some PyTorch builds (see
+            # the 'naive' comment).
+            m = int(self.dim * (self.dim + 1) / 2)
+            diag_pos = torch.tensor(
+                [i * (2 * dim - i + 1) // 2 for i in range(dim)],
+                dtype=torch.long, device=device
+            )
+            kkt_diag = torch.full((m,), 2.0, dtype=torch.float32, device=device)
+            kkt_diag[diag_pos] = 1.0
+            self._kkt_diag = kkt_diag + self.rho
+
+            row1 = torch.empty(m, dtype=torch.long, device=device)
+            row2 = torch.empty(m, dtype=torch.long, device=device)
+            for i in range(dim):
+                for j in range(i, dim):
+                    pos = i * dim + j - i * (i + 1) // 2
+                    row1[pos] = i
+                    row2[pos] = j
+            # Diagonal vech positions get their second nonzero in the trace row.
+            row2[diag_pos] = dim
+            self._row1 = row1
+            self._row2 = row2
+            self._b_dense = self.b.to_dense()
+
+        if self.mode == 'cudss':
+            # Sparse-direct KKT solves through torch-sla: the same
+            # [[P + rho I, A^T], [A, 0]] system as 'naive', stored as a
+            # SparseTensor with O(D^2) memory instead of the O(D^4) dense
+            # KKT matrix. Factorization runs in float64 (both the scipy and
+            # the cuDSS backend); the system values are exactly
+            # representable, so this only helps numerical robustness.
+            try:
+                from torch_sla import SparseTensor
+                from torch_sla.backends import is_cudss_available
+            except ImportError as e:
+                raise ImportError(
+                    "mode='cudss' requires torch-sla: "
+                    "pip install torch-sla (+ [cudss] on CUDA machines)"
+                ) from e
+            m = int(self.dim * (self.dim + 1) / 2)
+            n = m + self.dim + 1
+            arange_m = torch.arange(m, device=device)
+            kkt_row = torch.cat((
+                arange_m, arange_m, arange_m, m + self._row1, m + self._row2,
+            ))
+            kkt_col = torch.cat((
+                arange_m, m + self._row1, m + self._row2, arange_m, arange_m,
+            ))
+            kkt_val = torch.cat((
+                self._kkt_diag,
+                torch.ones(2 * m, device=device),
+                torch.ones(2 * m, device=device),
+            )).to(torch.float64)
+            self._A_sla = SparseTensor(kkt_val, kkt_row, kkt_col, (n, n))
+            if torch.device(device).type == 'cuda':
+                if not is_cudss_available():
+                    raise RuntimeError(
+                        "mode='cudss' on CUDA requires the cuDSS backend: "
+                        "pip install torch-sla[cudss]"
+                    )
+                # torch-sla 0.3.3 has no cached cuDSS factorization (only
+                # one-shot solve()), so each ADMM iteration pays a fresh
+                # factorization; the scipy backend below uses the cached
+                # A.lu() instead.
+                self._sla_backend = 'cudss'
+            else:
+                # SuperLU's default COLAMD ordering fills heavily on this
+                # KKT structure from dim ~100; the CPU path is meant for
+                # small dims and tests, not the large-dim sweep.
+                self._lu = self._A_sla.lu()
+                self._sla_backend = 'scipy'
+
     @staticmethod
     def pos_threshold(x, gamma):
 
@@ -705,6 +871,12 @@ class ProjADMM:
         max_iter: int,
         callback=None,
         max_time: float = None,
+        # By default max_time disables the tolerance break: callers like the
+        # online-learning runners want the solver to keep iterating for the
+        # whole time window so metrics can be recorded over it. Benchmarks
+        # instead want max_time as a pure safety cap: pass early_stop=True to
+        # also break once the tolerance is met.
+        early_stop: bool = False,
     ):
 
         f_t = F_t.reshape((self.dim ** 2,))
@@ -736,7 +908,7 @@ class ProjADMM:
                 if callback is not None:
                     L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
                     callback(self.iter, L_iter)
-                if max_time is None and err < tolerance:
+                if (max_time is None or early_stop) and err < tolerance:
                     break
 
         if self.mode == 'optimized':
@@ -760,7 +932,66 @@ class ProjADMM:
                 if callback is not None:
                     L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
                     callback(self.iter, L_iter)
-                if max_time is None and err < tolerance:
+                if (max_time is None or early_stop) and err < tolerance:
+                    break
+
+        if self.mode == 'minres':
+            m = int(self.dim * (self.dim + 1) / 2)
+            row1, row2 = self._row1, self._row2
+
+            def kkt_matvec(v):
+                top = (self._kkt_diag * v[:m] + v[m:][row1] + v[m:][row2])
+                bottom = torch.zeros(self.dim + 1, dtype=v.dtype, device=v.device)
+                bottom.index_add_(0, row1, v[:m])
+                bottom.index_add_(0, row2, v[:m])
+                return torch.cat((top, bottom))
+
+            self.total_inner_iter = 0
+            for _ in range(max_iter):
+                if max_time is not None and (time.perf_counter() - t0) > max_time:
+                    break
+                l_old = self.l.detach().clone()
+                rhs = torch.cat((q + self.rho * (self.z + self.v), self._b_dense))
+                l_mu, n_inner = _minres(kkt_matvec, rhs, tol=self.minres_tol,
+                                        max_iter=self.minres_max_iter)
+                self.total_inner_iter += n_inner
+                self.l = l_mu[:m]
+                w = self.l - self.v
+                self.z[self.idx_on] = w[self.idx_on]
+                self.z[self.idx_off] = torch.minimum(w[self.idx_off], torch.tensor(0.))
+                self.v += self.z - self.l
+                err = torch.linalg.norm(self.l - l_old) / self.l.shape[0]
+                self.iter = _ + 1
+                if callback is not None:
+                    L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
+                    callback(self.iter, L_iter)
+                if (max_time is None or early_stop) and err < tolerance:
+                    break
+
+        if self.mode == 'cudss':
+            m = int(self.dim * (self.dim + 1) / 2)
+            for _ in range(max_iter):
+                if max_time is not None and (time.perf_counter() - t0) > max_time:
+                    break
+                l_old = self.l.detach().clone()
+                rhs = torch.cat((
+                    q + self.rho * (self.z + self.v), self._b_dense
+                )).to(torch.float64)
+                if self._sla_backend == 'cudss':
+                    l_mu = self._A_sla.solve(rhs, backend='cudss', method='lu')
+                else:
+                    l_mu = self._lu.solve(rhs)
+                self.l = l_mu[:m].to(self.l.dtype)
+                w = self.l - self.v
+                self.z[self.idx_on] = w[self.idx_on]
+                self.z[self.idx_off] = torch.minimum(w[self.idx_off], torch.tensor(0.))
+                self.v += self.z - self.l
+                err = torch.linalg.norm(self.l - l_old) / self.l.shape[0]
+                self.iter = _ + 1
+                if callback is not None:
+                    L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
+                    callback(self.iter, L_iter)
+                if (max_time is None or early_stop) and err < tolerance:
                     break
 
         l = self.M_dup @ self.l
@@ -959,11 +1190,15 @@ class ProjIPM:
         eps_out = max(tolerance, self.eps_out)
 
         t0 = time.perf_counter() if max_time is not None else None
+        # Deadline enforced inside the inner Newton loop as well: a single
+        # outer iteration may run up to `max_inner_iter` Newton steps, which
+        # can far exceed the remaining time budget.
+        deadline = (t0 + max_time) if max_time is not None else None
 
         self.iter = 0
         for _ in range(max_iter):
             self.iter = _ + 1
-            if max_time is not None and (time.perf_counter() - t0) > max_time:
+            if deadline is not None and time.perf_counter() > deadline:
                 break
             if max_time is None and self.D_minus / t <= eps_out:
                 if callback is not None:
@@ -974,6 +1209,8 @@ class ProjIPM:
                 break
 
             for _ in range(self.max_inner_iter):
+                if deadline is not None and time.perf_counter() > deadline:
+                    break
                 l = self.l
                 off = l[self.off_mask]
 
@@ -1012,9 +1249,15 @@ class ProjIPM:
                     S[self.dim, :self.dim] = -H_inv[self._diag_pos]
                     S[self.dim, self.dim] = -H_inv[self._diag_pos].sum()
 
-                    S_inv = torch.from_numpy(
-                        np.linalg.inv(S.detach().cpu().numpy())
-                    ).to(device=self.device, dtype=torch.float64)
+                    if str(self.device).startswith('cuda'):
+                        # Keep the inverse on the GPU: a (dim+1)x(dim+1)
+                        # factorization is a single cuSOLVER call, whereas
+                        # round-tripping through numpy stalls the pipeline.
+                        S_inv = torch.linalg.inv(S)
+                    else:
+                        S_inv = torch.from_numpy(
+                            np.linalg.inv(S.detach().cpu().numpy())
+                        ).to(device=self.device, dtype=torch.float64)
 
                     # A H^{-1} g computed from the sparse structure of A.
                     Hg = H_inv * g
@@ -1324,9 +1567,13 @@ class ProjActiveSet:
         new_N_inv[m0, m0] = 1.0 / sigma
 
         # Update primal: l_new = l - scale * P0^{-1} * (a_new - M^T t).
+        # Scatter the working-set multipliers with one indexed write instead
+        # of a per-edge Python loop (one kernel, not |W|).
         bw_t = torch.zeros(self.m, dtype=torch.float64, device=self.device)
-        for k, idx in enumerate(W):
-            bw_t[self._off_positions_list[idx]] = t[dim + 1 + k]
+        if W:
+            pos = torch.tensor([self._off_positions_list[idx] for idx in W],
+                               dtype=torch.long, device=self.device)
+            bw_t[pos] = t[dim + 1: dim + 1 + len(W)]
         correction = -self._A_T_mul_vec(t[:dim + 1]) - bw_t
         correction[pos_new] += 1.0
         l_new = l - scale * self.P0_inv * correction
@@ -1373,10 +1620,13 @@ class ProjActiveSet:
         y = y_red[inv_perm[:m - 1]]
         W = W[:j] + W[j + 1:]
 
-        # Recompute the primal from the reduced multipliers.
+        # Recompute the primal from the reduced multipliers (vectorized
+        # scatter, see _add_edge).
         bw = torch.zeros(self.m, dtype=torch.float64, device=self.device)
-        for k, idx in enumerate(W):
-            bw[self._off_positions_list[idx]] = y[dim + 1 + k]
+        if W:
+            pos = torch.tensor([self._off_positions_list[idx] for idx in W],
+                               dtype=torch.long, device=self.device)
+            bw[pos] = y[dim + 1: dim + 1 + len(W)]
         l = g - self.P0_inv * (self._A_T_mul_vec(y[:dim + 1]) + bw)
 
         return W, y, N_inv, l

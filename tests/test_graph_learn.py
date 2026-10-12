@@ -92,6 +92,55 @@ def test_proj_admm2_runs_one_iteration():
     assert learner.L.shape == (dim, dim)
 
 
+def test_proj_admm_minres_runs_one_iteration():
+    dim = 5
+    learner = ProjADMM(dim=dim, mode="minres", device="cpu")
+    F = torch.randn(dim, dim, device="cpu")
+    learner.forward(F_t=F, tolerance=1e-4, max_iter=1)
+    assert learner.L.shape == (dim, dim)
+    assert learner.total_inner_iter > 0
+
+
+def test_proj_admm_minres_matches_optimized():
+    # MINRES is matrix-free (no LAPACK needed); only the optimized anchor
+    # uses numpy's inverse.
+    dim = 5
+    F = torch.randn(dim, dim, device="cpu")
+    F = (F + F.T) / 2
+    opt = ProjADMM(dim=dim, vol=float(dim), device="cpu")
+    opt.forward(F_t=F, tolerance=1e-6, max_iter=5000)
+    mr = ProjADMM(dim=dim, vol=float(dim), mode="minres", device="cpu")
+    mr.forward(F_t=F, tolerance=1e-6, max_iter=5000)
+    rel_diff = torch.norm(mr.L - opt.L) / torch.norm(opt.L)
+    assert rel_diff < 1e-3
+
+
+torch_sla = pytest.importorskip("torch_sla", reason="mode='cudss' requires torch-sla")
+
+
+def test_proj_admm_cudss_runs_one_iteration():
+    dim = 5
+    learner = ProjADMM(dim=dim, mode="cudss", device="cpu")
+    F = torch.randn(dim, dim, device="cpu")
+    learner.forward(F_t=F, tolerance=1e-4, max_iter=1)
+    assert learner.L.shape == (dim, dim)
+
+
+def test_proj_admm_cudss_matches_optimized():
+    # The sparse-direct mode solves the same KKT system as the dense
+    # 'naive' mode (scipy SuperLU on CPU here; cuDSS on CUDA), so it must
+    # land on the same projection as ALP up to tolerance.
+    dim = 5
+    F = torch.randn(dim, dim, device="cpu")
+    F = (F + F.T) / 2
+    opt = ProjADMM(dim=dim, vol=float(dim), device="cpu")
+    opt.forward(F_t=F, tolerance=1e-6, max_iter=5000)
+    spd = ProjADMM(dim=dim, vol=float(dim), mode="cudss", device="cpu")
+    spd.forward(F_t=F, tolerance=1e-6, max_iter=5000)
+    rel_diff = torch.norm(spd.L - opt.L) / torch.norm(opt.L)
+    assert rel_diff < 1e-3
+
+
 def test_laplacian_active_set_runs_and_is_laplacian():
     dim = 5
     learner = ProjActiveSet(dim=dim, vol=float(dim), device="cpu")

@@ -354,7 +354,7 @@ class SmoothRunner(GraphLearningRunner):
                             default="activeset",
                             help="Inner solver for the Laplacian projection")
         parser.add_argument("--admm_mode", type=str,
-                            choices=["naive", "optimized"], default="optimized")
+                            choices=["naive", "optimized", "minres", "cudss"], default="optimized")
         parser.add_argument("--alpha", type=float, default=1e-3)
         parser.add_argument("--beta", type=float, default=100)
         parser.add_argument("--tol", type=float, default=1e-5)
@@ -510,7 +510,7 @@ class PolyRunner(GraphLearningRunner):
     @classmethod
     def add_args(cls, parser: Any) -> None:
         parser.add_argument("--admm_mode", type=str,
-                            choices=["naive", "optimized"], default="optimized")
+                            choices=["naive", "optimized", "minres", "cudss"], default="optimized")
         parser.add_argument("--deg", type=int, default=2)
         parser.add_argument("--alpha", type=float, default=4)
         parser.add_argument("--tol", type=float, default=1e-2)

@@ -10,6 +10,12 @@ Laplacian.
 Example
 -------
 python benchmark_projection.py --dim 20 --noise_level 0.2 --n_reps 10
+
+To compare solvers across --dim at constant recovery difficulty instead of
+constant noise (F-score at fixed noise degrades as --dim grows), calibrate
+the noise level from a target F-score instead:
+
+python benchmark_projection.py --dim 100 --target_f1 0.8 --n_reps 10
 """
 
 import argparse
@@ -31,11 +37,16 @@ from core.metrics import evaluate_laplacian_weighted, get_object_memory
 
 
 # Solvers to benchmark, with constructor flags and forward-call wrappers to
-# paper over their slightly different APIs.
+# paper over their slightly different APIs.  Optional per-solver "tol" and
+# "max_iter" entries override the global --tol/--max_iter for that solver,
+# allowing the accuracy/runtime trade-off to be tuned per method: IPM is run
+# tight (slow, accurate anchor), APG moderately tight (second), ADMM loose
+# (fast).  Active Set ignores tolerance (exact KKT stop) and keeps the global
+# max_iter cap.
 SOLVERS = {
     "ipm": {
         "class": ProjIPM,
-        "kwargs": {"eps_in": 1e-3, "eps_out": 1e-3, "max_inner_iter": 100, "t0": 1.0},
+        "kwargs": {"eps_in": 1e-8, "eps_out": 1e-6, "max_inner_iter": 100, "t0": 1.0},
         "call": lambda solver, H, tol, max_iter, max_time=None, callback=None: solver.forward(
             H, tolerance=tol, max_iter=max_iter, callback=callback, max_time=max_time
         ),
@@ -51,9 +62,15 @@ SOLVERS = {
     },
     "admm": {
         "class": ProjADMM,
-        "kwargs": {"mode": "optimized"},
+        "kwargs": {},
+        "tol": 1e-5,
+        # early_stop=True: max_time is a safety cap only; ProjADMM's default
+        # max_time semantics would disable the tolerance break and run every
+        # solve to the cap, making the sweep needlessly long (and all timings
+        # equal to the cap).
         "call": lambda solver, H, tol, max_iter, max_time=None, callback=None: solver.forward(
-            H, tolerance=tol, max_iter=max_iter, callback=callback, max_time=max_time
+            H, tolerance=tol, max_iter=max_iter, callback=callback, max_time=max_time,
+            early_stop=True,
         ),
         "iters": lambda solver: int(getattr(solver, "iter", -1)),
     },
@@ -109,6 +126,89 @@ def _recovery_error(L_hat: torch.Tensor, L_true: torch.Tensor) -> float:
     return float(torch.norm(L_hat - L_true) / torch.norm(L_true))
 
 
+def _f1_at_noise_level(
+    noise_level: float,
+    dim: int,
+    graph_type: str,
+    seed: int,
+    device: torch.device,
+    calib_solver: str,
+    calib_max_time: float,
+) -> float:
+    """F-score obtained by projecting a noisy Laplacian at a given noise level.
+
+    Used to calibrate ``--target_f1`` against ``--noise_level``: F-score is
+    monotonically decreasing in noise level for a fixed (seed, graph_type),
+    so this is safe to bisect on.
+    """
+    dataset = NoisyLaplacianDataset(
+        seed=seed, dim=dim, noise_level=noise_level, graph_type=graph_type
+    )
+    H = dataset.H.to(device)
+    L0 = torch.eye(dim, device=device)
+    cfg = SOLVERS[calib_solver]
+    solver = cfg["class"](
+        dim=dim, L=L0, vol=dataset.vol, device=str(device), mode="optimized",
+        **cfg["kwargs"],
+    )
+    cfg["call"](solver, H, tol=1e-6, max_iter=5000, max_time=calib_max_time)
+    return evaluate_laplacian_weighted(dataset.graph, solver.L)["f1_score"]
+
+
+def _calibrate_noise_level(
+    dim: int,
+    graph_type: str,
+    seed: int,
+    target_f1: float,
+    device: torch.device,
+    calib_solver: str = "activeset",
+    calib_max_time: float = 2.0,
+    tol: float = 0.01,
+    max_bisect: int = 25,
+    nl_bounds: tuple = (1e-4, 3.0),
+) -> "tuple[float, float]":
+    """Bisect ``noise_level`` so the reference solver's F-score matches ``target_f1``.
+
+    Returns ``(noise_level, achieved_f1)``. Raises if ``target_f1`` cannot be
+    bracketed within ``nl_bounds`` (after a few bound-expansion attempts).
+    """
+    def f1_at(nl: float) -> float:
+        return _f1_at_noise_level(
+            nl, dim, graph_type, seed, device, calib_solver, calib_max_time
+        )
+
+    lo, hi = nl_bounds
+    f1_lo, f1_hi = f1_at(lo), f1_at(hi)
+    for _ in range(10):
+        if f1_hi <= target_f1:
+            break
+        hi *= 2.0
+        f1_hi = f1_at(hi)
+    for _ in range(10):
+        if f1_lo >= target_f1:
+            break
+        lo /= 2.0
+        f1_lo = f1_at(lo)
+    if not (f1_hi <= target_f1 <= f1_lo):
+        raise SystemExit(
+            f"Cannot bracket target_f1={target_f1} for dim={dim}, seed={seed}: "
+            f"f1(noise_level={lo:.4g})={f1_lo:.3f}, f1(noise_level={hi:.4g})={f1_hi:.3f}. "
+            "Try a different --target_f1 or widen the search with different bounds."
+        )
+
+    mid, f1_mid = lo, f1_lo
+    for _ in range(max_bisect):
+        mid = 0.5 * (lo + hi)
+        f1_mid = f1_at(mid)
+        if abs(f1_mid - target_f1) <= tol:
+            break
+        if f1_mid > target_f1:
+            lo = mid
+        else:
+            hi = mid
+    return mid, f1_mid
+
+
 class _MetricCallback:
     """Record solver metrics at regular iteration intervals."""
 
@@ -143,8 +243,6 @@ class _MetricCallback:
         self._t0: Optional[float] = None
 
     def __call__(self, iteration: int, L: torch.Tensor) -> None:
-        if self._t0 is None:
-            self._t0 = time.perf_counter()
         if iteration % self.test_interval != 0:
             return
         self.iterations.append(iteration)
@@ -197,6 +295,8 @@ def _benchmark_solver(
     """Run warm-up + timed repetitions + metric-evolution run for one solver."""
     call = SOLVERS[name]["call"]
     iters_fn = SOLVERS[name]["iters"]
+    tol = SOLVERS[name].get("tol", tol)
+    max_iter = SOLVERS[name].get("max_iter", max_iter)
 
     # Warm-up (not timed).
     solver = solver_factory()
@@ -245,6 +345,9 @@ def _benchmark_solver(
     # Metric-evolution run: record metrics at every test_interval iteration.
     solver = solver_factory()
     callback = _MetricCallback(H, L_true, graph, vol, test_interval, L0)
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+    callback._t0 = time.perf_counter()
     call(solver, H, tol, max_iter, max_time=max_time, callback=callback)
     metrics = _constraint_metrics(solver.L, vol)
     metrics["objective"] = _objective(solver.L, H)
@@ -276,7 +379,23 @@ def main() -> None:
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--dim", type=int, default=20)
     parser.add_argument("--noise_level", type=float, default=0.1,
-                        help="Relative Frobenius-norm noise level on edges")
+                        help="Relative Frobenius-norm noise level on edges. "
+                             "Ignored if --target_f1 is set.")
+    parser.add_argument("--target_f1", type=float, default=None,
+                        help="If set, calibrate --noise_level per seed (via "
+                             "bisection) so a reference solver's F-score "
+                             "matches this target instead of using a fixed "
+                             "noise level. Useful for comparing solvers "
+                             "across --dim at constant recovery difficulty, "
+                             "since F-score at fixed noise degrades with dim.")
+    parser.add_argument("--calib_solver", type=str, default="activeset",
+                        choices=list(SOLVERS.keys()),
+                        help="Reference solver used to measure F-score when "
+                             "calibrating --target_f1")
+    parser.add_argument("--calib_max_time", type=float, default=2.0,
+                        help="Max wall time per calibration solve (seconds)")
+    parser.add_argument("--calib_tol", type=float, default=0.01,
+                        help="Acceptable |F-score - target_f1| when calibrating")
     parser.add_argument("--graph_type", type=str, default="rbf",
                         choices=["rbf", "rgg"],
                         help="Graph model used to build the ground-truth Laplacian")
@@ -291,6 +410,12 @@ def main() -> None:
     parser.add_argument("--n_runs", type=int, default=5,
                         help="Number of different seeds (cases) to average over")
     parser.add_argument("--solvers", type=str, default="ipm,activeset,admm")
+    parser.add_argument("--modes", type=str, default="optimized",
+                        help="Comma-separated solver modes (naive, optimized, minres, cudss). "
+                             "With several modes, each solver is saved as a "
+                             "<solver>_<mode>/ subdirectory so runs can be "
+                             "compared with plot_benchmark_projection.py "
+                             "--compare_modes")
     parser.add_argument("--seed", type=int, default=1,
                         help="First random seed")
     parser.add_argument("--save", action="store_true", help="Save results to logs/")
@@ -306,8 +431,37 @@ def main() -> None:
     if not solver_names:
         raise ValueError(f"No known solvers selected: {args.solvers}")
 
-    # Per-run raw results: solver -> list of metric dicts.
-    raw_results: Dict[str, List[Dict[str, float]]] = {name: [] for name in solver_names}
+    mode_list = [m.strip() for m in args.modes.split(",") if m.strip()]
+    if any(m not in ("naive", "optimized", "minres", "cudss") for m in mode_list):
+        raise ValueError(f"Unknown modes: {args.modes} (expected naive/optimized/minres/cudss)")
+
+    # Expand solvers x modes into run names; with a single mode the run name
+    # is the plain solver name (backward-compatible directory layout).
+    run_names = [n if len(mode_list) == 1 else f"{n}_{m}"
+                 for n in solver_names for m in mode_list]
+
+    # Per-run raw results: run name -> list of metric dicts.
+    raw_results: Dict[str, List[Dict[str, float]]] = {rn: [] for rn in run_names}
+
+    if args.target_f1 is not None:
+        # Calibrate once against the first seed and reuse the same noise
+        # level for every seed, rather than recalibrating per seed.
+        noise_level, achieved_f1 = _calibrate_noise_level(
+            dim=args.dim,
+            graph_type=args.graph_type,
+            seed=args.seed,
+            target_f1=args.target_f1,
+            device=device,
+            calib_solver=args.calib_solver,
+            calib_max_time=args.calib_max_time,
+            tol=args.calib_tol,
+        )
+        print(f"Calibrated noise_level={noise_level:.4f} "
+              f"(target_f1={args.target_f1:.3f}, achieved={achieved_f1:.3f} "
+              f"via {args.calib_solver} on seed={args.seed}); "
+              f"reused for all {args.n_runs} seed(s)")
+    else:
+        noise_level = args.noise_level
 
     for run_idx in range(args.n_runs):
         seed = args.seed + run_idx
@@ -315,9 +469,10 @@ def main() -> None:
         torch.random.manual_seed(seed)
 
         print(f"\n=== Run {run_idx + 1}/{args.n_runs} (seed={seed}) ===")
+
         H, L_true, graph, vol, L0 = _build_noisy_input(
             dim=args.dim,
-            noise_level=args.noise_level,
+            noise_level=noise_level,
             device=device,
             seed=seed,
             graph_type=args.graph_type,
@@ -327,31 +482,34 @@ def main() -> None:
 
         for name in solver_names:
             cfg = SOLVERS[name]
-            solver_factory = lambda: cfg["class"](
-                dim=args.dim,
-                L=L0,
-                vol=vol,
-                device=str(device),
-                **cfg["kwargs"],
-            )
+            for mode in mode_list:
+                run_name = name if len(mode_list) == 1 else f"{name}_{mode}"
+                solver_factory = lambda: cfg["class"](
+                    dim=args.dim,
+                    L=L0,
+                    vol=vol,
+                    device=str(device),
+                    mode=mode,
+                    **cfg["kwargs"],
+                )
 
-            print(f"  Benchmarking {name}...")
-            metrics = _benchmark_solver(
-                name=name,
-                solver_factory=solver_factory,
-                H=H,
-                L_true=L_true,
-                graph=graph,
-                vol=vol,
-                L0=L0,
-                tol=args.tol,
-                max_iter=args.max_iter,
-                max_time=args.max_time,
-                n_reps=args.n_reps,
-                test_interval=args.test_interval,
-                device=device,
-            )
-            raw_results[name].append(metrics)
+                print(f"  Benchmarking {run_name}...")
+                metrics = _benchmark_solver(
+                    name=name,
+                    solver_factory=solver_factory,
+                    H=H,
+                    L_true=L_true,
+                    graph=graph,
+                    vol=vol,
+                    L0=L0,
+                    tol=args.tol,
+                    max_iter=args.max_iter,
+                    max_time=args.max_time,
+                    n_reps=args.n_reps,
+                    test_interval=args.test_interval,
+                    device=device,
+                )
+                raw_results[run_name].append(metrics)
 
     # Aggregate across runs.
     aggregated: Dict[str, Dict[str, float]] = {}
@@ -382,16 +540,19 @@ def main() -> None:
     print("=" * 132)
 
     if args.save:
+        noise_tag = (f"f1{args.target_f1:.2f}" if args.target_f1 is not None
+                     else f"noise{args.noise_level:.0e}")
         sim_path = os.path.join(
             "logs", "benchmark_projection",
-            f"dim{args.dim}_noise{args.noise_level:.0e}_{args.graph_type}_seeds{args.seed}-{args.seed + args.n_runs - 1}"
+            f"dim{args.dim}_{noise_tag}_{args.graph_type}_"
+            f"{str(device).replace(':', '')}_seeds{args.seed}-{args.seed + args.n_runs - 1}"
         )
         ensure_log_dir(sim_path)
         out_file = os.path.join(sim_path, "results.json")
 
         # Save evolution arrays per solver/run on disk; keep only scalar
         # metrics in the JSON summary.
-        raw_for_json: Dict[str, List[Dict[str, float]]] = {name: [] for name in solver_names}
+        raw_for_json: Dict[str, List[Dict[str, float]]] = {rn: [] for rn in run_names}
         for name, runs in raw_results.items():
             for run_idx, run in enumerate(runs):
                 run_copy = {k: v for k, v in run.items() if k != "evolution"}
@@ -402,12 +563,28 @@ def main() -> None:
                 for arr_name, arr in evo.items():
                     np.save(os.path.join(evo_dir, f"{arr_name}.npy"), np.asarray(arr))
 
+        # Merge with a results.json already present in this dir: the sweep
+        # benchmarks solver groups in separate invocations that share the
+        # dim dir (e.g. ipm/activeset naive-only, then admm in all modes).
+        # New run names overwrite their own keys; previously saved solvers
+        # are preserved.
+        payload = {
+            "args": vars(args),
+            "noise_level_used": noise_level,
+            "aggregated": aggregated,
+            "raw_results": raw_for_json,
+        }
+        if os.path.exists(out_file):
+            with open(out_file) as f:
+                existing = json.load(f)
+            existing["aggregated"].update(payload["aggregated"])
+            existing["raw_results"].update(payload["raw_results"])
+            existing["args"] = payload["args"]
+            existing["noise_level_used"] = payload["noise_level_used"]
+            payload = existing
+
         with open(out_file, "w") as f:
-            json.dump({
-                "args": vars(args),
-                "aggregated": aggregated,
-                "raw_results": raw_for_json,
-            }, f, indent=2)
+            json.dump(payload, f, indent=2)
         print(f"\nResults saved to {out_file}")
 
 
