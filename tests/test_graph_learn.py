@@ -102,8 +102,8 @@ def test_proj_admm_minres_runs_one_iteration():
 
 
 def test_proj_admm_minres_matches_optimized():
-    # MINRES is matrix-free (no LAPACK needed); only the optimized anchor
-    # uses numpy's inverse.
+    # MINRES is matrix-free (no LAPACK needed); the optimized anchor applies
+    # the closed-form Schur inverse, so neither path needs a dense solver.
     dim = 5
     F = torch.randn(dim, dim, device="cpu")
     F = (F + F.T) / 2
