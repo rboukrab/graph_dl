@@ -31,6 +31,7 @@ def _make_args(algorithm: str, data_set: str = "stat", dim: int = 6,
                      "alpha": 1e-2, "beta": 0.3, "tol": 1e-2, "max_iter": 2})
     elif algorithm == "poly":
         base.update({"admm_mode": "optimized", "deg": 1, "alpha": 1.0,
+                     "penalty": "mcp", "mcp_gamma": 3.0, "eta_scale": 1.0,
                      "tol": 1e-2, "max_iter": 2})
     elif algorithm == "pgl":
         base.update({"admm_mode": "optimized", "rho": 1e-1, "eta": 1e-1,

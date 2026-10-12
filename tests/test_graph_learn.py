@@ -109,3 +109,55 @@ def test_laplacian_active_set_runs_and_is_laplacian():
     # Off-diagonals non-positive
     off_diag = L[torch.eye(dim, device=L.device) == 0]
     assert (off_diag <= 1e-6).all()
+
+
+def _random_laplacian(dim: int, vol: float, seed: int = 0) -> torch.FloatTensor:
+    gen = torch.Generator().manual_seed(seed)
+    W = torch.triu((torch.rand(dim, dim, generator=gen) < 0.4) * torch.rand(dim, dim, generator=gen), 1)
+    W = W + W.T
+    L = torch.diag(W.sum(1)) - W
+    return L * vol / torch.trace(L)
+
+
+@pytest.mark.parametrize("dim", [2, 5, 12])
+def test_proj_admm_closed_form_schur_inverse(dim):
+    import numpy as np
+    learner = ProjADMM(dim=dim, vol=float(dim))
+    m = dim * (dim + 1) // 2
+    # Dense A built analytically (row sums of the vech of L, then the trace), since
+    # sparse to_dense() is unreliable on some builds; reference solve with NumPy
+    # because CPU LAPACK may be unavailable in torch.
+    A = np.zeros((dim + 1, m))
+    for i in range(dim):
+        for j in range(dim):
+            pos = i * dim + j - i * (i + 1) // 2 if j >= i else j * dim + i - j * (j + 1) // 2
+            A[i, pos] = 1.0
+        A[dim, i * (2 * dim - i + 1) // 2] = 1.0
+    rinv = np.zeros(m)
+    rinv_c = learner.Rinv.coalesce()
+    rinv[rinv_c.indices()[1].numpy()] = rinv_c.values().double().numpy()
+    S = (A * rinv) @ A.T
+    s = np.random.default_rng(dim).standard_normal(dim + 1)
+    t = learner._schur_inv_apply(torch.tensor(s, dtype=torch.float32)).double().numpy()
+    assert np.allclose(t, np.linalg.solve(S, s), rtol=1e-4, atol=1e-5)
+
+
+def test_proj_admm_projects_target_matrix():
+    """forward(F_t=G) projects G onto the Laplacians: a valid Laplacian is a fixed point."""
+    dim, vol = 8, 8.0
+    L0 = _random_laplacian(dim, vol)
+    learner = ProjADMM(dim=dim, vol=vol)
+    learner.forward(F_t=L0, tolerance=1e-10, max_iter=5000)
+    assert torch.allclose(learner.L, L0, atol=1e-4)
+
+
+def test_firm_threshold_is_mcp_prox():
+    from core.runners import PolyRunner
+    lam, gamma, tau = 0.7, 3.0, 2.0
+    y = torch.linspace(-4, 4, 41, dtype=torch.float64)
+    xs = torch.linspace(-6, 6, 120001, dtype=torch.float64)
+    ax = xs.abs()
+    mcp = torch.where(ax <= gamma * lam, lam * ax - ax ** 2 / (2 * gamma),
+                      torch.full_like(xs, gamma * lam ** 2 / 2))
+    brute = torch.stack([xs[torch.argmin(mcp + tau / 2 * (xs - yi) ** 2)] for yi in y])
+    assert torch.allclose(PolyRunner.firm_threshold(y, lam, gamma, tau), brute, atol=2e-4)

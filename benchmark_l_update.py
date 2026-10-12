@@ -7,6 +7,7 @@ import torch
 import numpy as np
 from core.datasets import StatDataset
 from core.graph_learn import ProjADMM
+from core.runners import PolyRunner
 from torch.nn.functional import softshrink
 
 # Training settings
@@ -17,12 +18,16 @@ parser.add_argument('--device', type=str, default=None)
 parser.add_argument('--dim', type=int, default=100, help='Graph dimension')
 parser.add_argument('--deg', type=int, default=2, help='Laplacian polynomial degree')
 parser.add_argument('--alpha', type=float, default=4)
+parser.add_argument('--penalty', type=str, choices=['mcp', 'l1'], default='mcp', help='Sparsity penalty')
+parser.add_argument('--mcp_gamma', type=float, default=3.0, help='MCP concavity parameter (> 1)')
+parser.add_argument('--eta_scale', type=float, default=1.0,
+                    help='Outer ADMM penalty of the L-update, as a multiple of b_t')
 parser.add_argument('--mode', type=str, choices=['naive', 'optimized'], default='naive',
                     help='ADMM computing method')
 parser.add_argument('--n_samples', type=int, default=1000, help='Number of samples for covariance')
 parser.add_argument('--n_iters', type=int, default=100, help='Number of benchmark iterations')
 parser.add_argument('--tol', type=float, default=1e-2, help='Graph learning algorithm tolerance')
-parser.add_argument('--max_iter', type=int, default=10, help='Graph learning algorithm max iters')
+parser.add_argument('--max_iter', type=int, default=100, help='Graph learning algorithm max iters')
 parser.add_argument('--seed', type=int, default=2)
 
 if __name__ == '__main__':
@@ -128,13 +133,20 @@ if __name__ == '__main__':
 
         while not found and idx_L < 10:
             F_t = b_t * L_old - grad_h_L
-            rho = 1e-3
+            # Same outer ADMM as PolyRunner.step (see the comments there)
+            eta = args.eta_scale * b_t
+            tau = b_t + eta
+            Omega = L_old.detach().clone()
+            U = torch.zeros_like(L_old)
             for _ in range(max_iter):
-                Phi_old = Phi.detach().clone()
-                K = F_t + rho * (Omega + U)
-                Phi = (softshrink(K, alpha) * O + K * I) / (b_t + rho)
+                K = F_t + eta * (Omega + U)
+                if args.penalty == 'mcp':
+                    off = PolyRunner.firm_threshold(K / tau, alpha, args.mcp_gamma, tau)
+                else:
+                    off = softshrink(K, alpha) / tau
+                Phi = off * O + (K / tau) * I
                 graph_learner.forward(
-                    F_t=-(Phi+U),
+                    F_t=Phi - U,
                     tolerance=1e-5,
                     max_iter=1000
                 )
@@ -143,7 +155,7 @@ if __name__ == '__main__':
                 err = torch.linalg.norm(Phi - Omega)
                 if err < tol:
                     break
-            L_new = graph_learner.L.detach().clone()
+            L_new = Omega.detach().clone()
 
             # Update Laplacian powers
             Lp[1] = L_new.detach().clone()
