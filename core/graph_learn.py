@@ -1,4 +1,5 @@
 import time
+import warnings
 
 import numpy as np
 import torch
@@ -651,6 +652,16 @@ class ProjADMM:
         super().__init__()
 
         self.device = device
+        if mode == 'naive':
+            # The dense-LU KKT solve (torch.linalg.solve, O(D^4) memory) was
+            # removed; 'cudss' solves the same system sparsely with O(D^2)
+            # memory, so it is the LU solver going forward.
+            warnings.warn(
+                "ProjADMM mode='naive' (dense LU) was removed; using "
+                "'cudss' (sparse-direct LU on the same KKT system) instead.",
+                DeprecationWarning, stacklevel=2,
+            )
+            mode = 'cudss'
         self.mode = mode
         self.minres_tol = float(minres_tol)
         self.minres_max_iter = minres_max_iter
@@ -662,61 +673,53 @@ class ProjADMM:
         else:
             self.L = L
 
-        index_dup, value_dup = duplication_matrix(dim)
-        self.M_dup = torch.sparse_coo_tensor(index_dup, value_dup, size=(int(dim * (dim + 1) / 2), dim ** 2)).T.coalesce().to(device)
+        # Vech bookkeeping shared by all modes. A vech position pos of the
+        # pair (i, j) is pos = i * dim + j - i * (i + 1) // 2, and row i of
+        # the vech layout starts at its diagonal position
+        # diag_pos[i] = i * (2 * dim - i + 1) // 2.
+        m = int(dim * (dim + 1) / 2)
+        iu = torch.arange(dim, device=device)
+        self.diag_pos = iu * (2 * dim - iu + 1) // 2
+        # Diagonal of P = M_dup^T M_dup: 1 on diagonal vech entries, 2 off.
+        self.th = torch.full((m,), 2.0, dtype=torch.float32, device=device)
+        self.th[self.diag_pos] = 1.0
+        # Vertex-edge incidence maps of A (entries are all 1):
+        # row1[pos] = i, row2[pos] = j, with diagonal vech positions carrying
+        # their second nonzero in the trace-constraint row (index dim).
+        # Vectorized; the previous Python double loop and the
+        # C1_eq/C_ineq spspmm products were the constructor bottleneck and
+        # the source of segfaults at large dim on some builds.
+        counts = dim - iu
+        row1 = torch.repeat_interleave(iu, counts)
+        row2 = row1 + torch.arange(m, device=device) - self.diag_pos[row1]
+        # Column position of the pair (i, j) / (j, i) in vec(F), used to
+        # build q and L without the M_dup COO tensor (CPU coalesce of a
+        # large COO segfaults on some torch builds). Computed before the
+        # trace-row sentinel below overwrites row2 at diagonal positions.
+        self._vec1 = row1 * dim + row2
+        self._vec2 = row2 * dim + row1
+        self._diag_vec = iu * (dim + 1)
+        row2[self.diag_pos] = dim
+        self._row1 = row1
+        self._row2 = row2
 
-        # Matrix A
-        index_eq1 = torch.tensor([
-            [i for i in range(dim) for j in range(dim)],
-            [i for i in range(dim ** 2)]
-        ])
-        value_eq1 = torch.tensor([1 for i in range(dim ** 2)]).float()
-        C1_eq = torch.sparse_coo_tensor(indices=index_eq1, values=value_eq1).to(device)
-        self.A1 = C1_eq @ self.M_dup
+        # Diagonal of R = P + rho I and its inverse, as dense vectors.
+        self._kkt_diag = self.th + self.rho
+        self._rinv_vals = 1.0 / self._kkt_diag
 
-        index_eq2 = torch.tensor([
-            [0 for _ in range(dim)],
-            [i * (dim + 1) for i in range(dim)]
-        ])
-        value_eq2 = torch.tensor([1 for _ in range(dim)]).float()
-        # index_eq = torch.hstack((index_eq1, index_eq2))
-        # value_eq = torch.cat((value_eq1, value_eq2))
-        c2_eq = torch.sparse_coo_tensor(indices=index_eq2, values=value_eq2).to(device)
-        self.a2 = c2_eq @ self.M_dup
+        self.idx_on = self.diag_pos
+        off_mask = torch.ones(m, dtype=torch.bool, device=device)
+        off_mask[self.diag_pos] = False
+        self.idx_off = torch.arange(m, device=device)[off_mask]
 
-        self.A = torch.vstack((self.A1, self.a2))
-        self.P = self.M_dup.T @ self.M_dup
-        self.Rinv = torch.sparse_coo_tensor(
-            indices=self.P.indices(),
-            values=1. / (self.P.values() + self.rho)
-        ).to(device)
-
-        # Matrix B
-        index_ineq = torch.tensor([
-            [i for i in range(int(dim * (dim - 1) / 2))],
-            [j + 1 + i * dim for i in range(dim - 1) for j in range(i, dim - 1)]
-        ])
-        value_ineq = torch.tensor([1 for _ in range(int(dim * (dim - 1) / 2))]).float()
-        C_ineq = torch.sparse_coo_tensor(
-            indices=index_ineq,
-            values=value_ineq,
-            size=(int(dim * (dim - 1) / 2), dim ** 2)
-        ).to(device)
-        self.B = C_ineq @ self.M_dup
-
-        # Vector b
-        self.b = torch.sparse_coo_tensor(
-            indices=torch.tensor([[dim]]),
-            values=torch.tensor([vol]).float()
-        ).to(device)
-
-        self.idx_off = self.B.indices()[1]
-        self.idx_on = self.a2.indices()[1]
+        self._vol = float(vol)
+        self._b_dense = torch.zeros(dim + 1, dtype=torch.float32, device=device)
+        self._b_dense[dim] = self._vol
 
         # Outer loop variables
-        self.l = torch.zeros(int(self.dim * (self.dim + 1) / 2), device=device)
-        self.z = torch.zeros(int(self.dim * (self.dim + 1) / 2), device=device)
-        self.v = torch.zeros(int(self.dim * (self.dim + 1) / 2), device=device)
+        self.l = torch.zeros(m, device=device)
+        self.z = torch.zeros(m, device=device)
+        self.v = torch.zeros(m, device=device)
 
         # Closed-form inverse of the Schur complement A R^{-1} A^T, where R = P + rho I has entries
         # u = 1 + rho (diagonal of L) and v = 2 + rho (off-diagonal of L):
@@ -729,69 +732,25 @@ class ProjADMM:
         self.delta1 = v * (v * kappa1 - m2 * u ** 2) / (m2 * kappa1 * kappa2)
         self.delta2 = -v / m2
         self.delta3 = kappa2 / m2
-        self.th = self.P.values()
 
-        if self.mode == 'naive':
-            # Dense KKT matrix M = [[P + rho I, A^T], [A, 0]], built
-            # analytically (to_dense on sparse tensors is unreliable on some
-            # sparse-tensor builds).
-            m = int(self.dim * (self.dim + 1) / 2)
-            diag_pos = torch.tensor(
-                [i * (2 * dim - i + 1) // 2 for i in range(dim)],
-                dtype=torch.long, device=device
+        if self.mode == 'optimized':
+            # Kept for the closed-form-Schur unit test; the ADMM loop itself
+            # uses the dense self._rinv_vals instead of sparse matvecs.
+            # Indices are sorted and unique, so is_coalesced=True skips the
+            # coalesce sort (which segfaults on CPU for large COO on some
+            # torch builds).
+            pos = torch.arange(m, device=device)
+            self.Rinv = torch.sparse_coo_tensor(
+                indices=torch.stack((pos, pos)),
+                values=self._rinv_vals.clone(),
+                size=(m, m),
+                is_coalesced=True,
             )
-            row_pos = torch.zeros((dim, dim), dtype=torch.long, device=device)
-            for i in range(dim):
-                for j in range(dim):
-                    pos = (i * dim + j - i * (i + 1) // 2 if j >= i
-                           else j * dim + i - j * (j + 1) // 2)
-                    row_pos[i, j] = pos
-            A_dense = _dense_equality_matrix(
-                dim, m, row_pos, diag_pos, device
-            ).to(dtype=torch.float32)
-            P_full = torch.full((m,), 2.0, dtype=torch.float32, device=device)
-            P_full[diag_pos] = 1.0
-            self.M = torch.zeros((m + dim + 1, m + dim + 1),
-                                 dtype=torch.float32, device=device)
-            self.M[:m, :m] = torch.diag(P_full + self.rho)
-            self.M[:m, m:] = A_dense.T
-            self.M[m:, :m] = A_dense
-
-        if self.mode in ('minres', 'cudss'):
-            # Index map of the KKT operator [[P + rho I, A^T], [A, 0]],
-            # shared by MINRES (matrix-free matvec) and cudss (sparse
-            # direct): diagonal top-left block plus column pos of A with
-            # nonzeros in rows row1[pos] and row2[pos], the trace constraint
-            # stored as row dim. Index ops are used because sparse COO
-            # transpose/to_dense are unreliable on some PyTorch builds (see
-            # the 'naive' comment).
-            m = int(self.dim * (self.dim + 1) / 2)
-            diag_pos = torch.tensor(
-                [i * (2 * dim - i + 1) // 2 for i in range(dim)],
-                dtype=torch.long, device=device
-            )
-            kkt_diag = torch.full((m,), 2.0, dtype=torch.float32, device=device)
-            kkt_diag[diag_pos] = 1.0
-            self._kkt_diag = kkt_diag + self.rho
-
-            row1 = torch.empty(m, dtype=torch.long, device=device)
-            row2 = torch.empty(m, dtype=torch.long, device=device)
-            for i in range(dim):
-                for j in range(i, dim):
-                    pos = i * dim + j - i * (i + 1) // 2
-                    row1[pos] = i
-                    row2[pos] = j
-            # Diagonal vech positions get their second nonzero in the trace row.
-            row2[diag_pos] = dim
-            self._row1 = row1
-            self._row2 = row2
-            self._b_dense = self.b.to_dense()
-
         if self.mode == 'cudss':
-            # Sparse-direct KKT solves through torch-sla: the same
-            # [[P + rho I, A^T], [A, 0]] system as 'naive', stored as a
-            # SparseTensor with O(D^2) memory instead of the O(D^4) dense
-            # KKT matrix. Factorization runs in float64 (both the scipy and
+            # Sparse-direct KKT solves through torch-sla: the
+            # [[P + rho I, A^T], [A, 0]] system formerly built densely,
+            # stored as a SparseTensor with O(D^2) memory instead of the
+            # O(D^4) dense KKT matrix. Factorization runs in float64 (both the scipy and
             # the cuDSS backend); the system values are exactly
             # representable, so this only helps numerical robustness.
             try:
@@ -866,7 +825,11 @@ class ProjADMM:
     ):
 
         f_t = F_t.reshape((self.dim ** 2,))
-        q = self.M_dup.T @ f_t
+        # q = vech(F + F^T): off-diagonal vech entries sum the symmetric
+        # pair, diagonal entries take F_ii once (overwrites the 2*F_ii from
+        # the two gathers). Dense equivalent of M_dup^T f_t.
+        q = f_t[self._vec1] + f_t[self._vec2]
+        q[self.diag_pos] = f_t[self._diag_vec]
 
         if max_time is not None:
             max_iter = max(max_iter, 10 ** 9)
@@ -875,37 +838,27 @@ class ProjADMM:
 
         # Projection step
         self.iter = 0
-        if self.mode == 'naive':
-            for _ in range(max_iter):
-                if max_time is not None and (time.perf_counter() - t0) > max_time:
-                    break
-                l_old = self.l.detach().clone()
-                l_mu = torch.linalg.solve(self.M, torch.cat((
-                    q + self.rho * (self.z + self.v),
-                    self.b.to_dense()
-                )))
-                self.l = l_mu[:int(self.l.shape[0])]
-                w = self.l - self.v
-                self.z[self.idx_on] = w[self.idx_on]
-                self.z[self.idx_off] = torch.minimum(w[self.idx_off], torch.tensor(0.))
-                self.v += self.z - self.l
-                err = torch.linalg.norm(self.l - l_old) / self.l.shape[0]
-                self.iter = _ + 1
-                if callback is not None:
-                    L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
-                    callback(self.iter, L_iter)
-                if (max_time is None or early_stop) and err < tolerance:
-                    break
-
         if self.mode == 'optimized':
+            # All per-iteration linear algebra in dense O(m) = O(D^2) vector
+            # ops. A has unit entries, so A @ Rinv @ r and A^T @ t reduce to
+            # index_add_/gathers with the vech row maps, and Rinv applies as
+            # a diagonal scaling. No sparse matvecs and no per-iteration
+            # sparse-sparse product: the old self.A @ self.Rinv inside the
+            # loop blew up at D = 1000 and made MINRES look faster than ALP.
+            row1, row2 = self._row1, self._row2
+            rinv = self._rinv_vals
             for _ in range(max_iter):
                 if max_time is not None and (time.perf_counter() - t0) > max_time:
                     break
                 l_old = self.l.detach().clone()
                 r = q + self.rho * (self.z + self.v)
-                s = self.A @ self.Rinv @ r - self.b
+                w = rinv * r
+                s = torch.zeros(self.dim + 1, dtype=r.dtype, device=r.device)
+                s.index_add_(0, row1, w)
+                s.index_add_(0, row2, w)
+                s[self.dim] -= self._vol
                 t = self._schur_inv_apply(s)
-                self.l = self.Rinv @ (r - self.A.T @ t)
+                self.l = rinv * (r - (t[row1] + t[row2]))
                 w = self.l - self.v
                 self.z[self.idx_on] = w[self.idx_on]
                 self.z[self.idx_off] = torch.minimum(w[self.idx_off], torch.tensor(0.))
@@ -913,7 +866,11 @@ class ProjADMM:
                 err = torch.linalg.norm(self.l - l_old) / self.l.shape[0]
                 self.iter = _ + 1
                 if callback is not None:
-                    L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
+                    L_iter = torch.zeros(self.dim ** 2, dtype=self.l.dtype,
+                                         device=self.l.device)
+                    L_iter[self._vec1] = self.l
+                    L_iter[self._vec2] = self.l
+                    L_iter = L_iter.reshape(self.dim, self.dim)
                     callback(self.iter, L_iter)
                 if (max_time is None or early_stop) and err < tolerance:
                     break
@@ -946,7 +903,11 @@ class ProjADMM:
                 err = torch.linalg.norm(self.l - l_old) / self.l.shape[0]
                 self.iter = _ + 1
                 if callback is not None:
-                    L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
+                    L_iter = torch.zeros(self.dim ** 2, dtype=self.l.dtype,
+                                         device=self.l.device)
+                    L_iter[self._vec1] = self.l
+                    L_iter[self._vec2] = self.l
+                    L_iter = L_iter.reshape(self.dim, self.dim)
                     callback(self.iter, L_iter)
                 if (max_time is None or early_stop) and err < tolerance:
                     break
@@ -972,12 +933,19 @@ class ProjADMM:
                 err = torch.linalg.norm(self.l - l_old) / self.l.shape[0]
                 self.iter = _ + 1
                 if callback is not None:
-                    L_iter = (self.M_dup @ self.l).reshape(self.dim, self.dim).to(self.device)
+                    L_iter = torch.zeros(self.dim ** 2, dtype=self.l.dtype,
+                                         device=self.l.device)
+                    L_iter[self._vec1] = self.l
+                    L_iter[self._vec2] = self.l
+                    L_iter = L_iter.reshape(self.dim, self.dim)
                     callback(self.iter, L_iter)
                 if (max_time is None or early_stop) and err < tolerance:
                     break
 
-        l = self.M_dup @ self.l
+        # L = unvec(M_dup l): symmetric fill from the vech vector.
+        l = torch.zeros(self.dim ** 2, dtype=self.l.dtype, device=self.l.device)
+        l[self._vec1] = self.l
+        l[self._vec2] = self.l
         self.L = l.reshape(self.dim, self.dim).to(self.device)
 
 
@@ -990,7 +958,7 @@ class ProjIPM:
 
     With ``mode='naive'`` the inner Newton step instead assembles the dense
     KKT system ``[[H, A^T], [A, 0]]`` and solves it directly with
-    ``torch.linalg.solve``, mirroring the naive mode of ``ProjADMM``.
+    ``torch.linalg.solve``.
     """
 
     def __init__(
@@ -1308,8 +1276,7 @@ class ProjActiveSet:
     than refactorizing the working-set KKT system.
 
     With ``mode='naive'`` the working-set KKT system is instead assembled
-    densely and solved directly with ``torch.linalg.solve`` at every update,
-    mirroring the naive modes of ``ProjADMM`` and ``ProjIPM``.
+    densely and solved directly with ``torch.linalg.solve`` at every update.
     """
 
     def __init__(

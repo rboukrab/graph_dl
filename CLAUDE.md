@@ -44,10 +44,10 @@ target dimension `dim` and an initial Laplacian `L`:
   `benchmark_projection.py`. Each takes a `mode` kwarg:
   - `mode='optimized'` (default) — sparse/structured linear algebra (duplication matrix, Schur-complement
     updates for `ProjActiveSet`, sparse Newton steps for `ProjIPM`).
-  - `mode='naive'` — assembles the dense KKT system directly and solves it with `torch.linalg.solve`. This
-    exists because sparse `to_dense()` is unreliable on some PyTorch builds in this environment; dense
-    matrices in `mode='naive'` (and in shared helpers like `_dense_equality_matrix`) are built analytically via
-    `scatter_` instead of densifying a sparse tensor.
+  - `mode='naive'` (`ProjIPM`/`ProjActiveSet` only) — assembles the dense KKT system directly and solves it
+    with `torch.linalg.solve`, kept as the dense baseline for those two solvers (`ProjADMM`'s naive mode was
+    removed; `cudss` is its sparse-direct LU replacement). Dense matrices are built analytically via
+    `scatter_` because sparse `to_dense()` is unreliable on some PyTorch builds in this environment.
   - `mode='minres'` (`ProjADMM` only) — solves the same KKT system with a matrix-free MINRES Krylov solver
     (`_minres`, adapted from `gpytorch.utils.minres`): O(D^2) per inner iteration via the sparse equality
     matrix and the diagonal `P + rho I`, O(D^2) memory, no dense KKT assembly. Tuning kwargs:

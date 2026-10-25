@@ -38,6 +38,18 @@ COLORS = {"ipm": "C0", "activeset": "C1", "admm": "C2"}
 MARKERS = {"ipm": "o", "activeset": "s", "admm": "^"}
 LABELS = {"ipm": "IPM", "activeset": "Active Set", "admm": "ADMM"}
 
+# Per-(solver, mode) styles for --compare_modes: colorblind-safe Okabe-Ito
+# colors so the four ADMM variants are distinguishable at a glance (family
+# color + linestyle alone was too subtle). (color, linestyle, marker, label).
+SERIES_STYLES = {
+    "ipm_naive": ("#0072B2", "--", "o", "IPM"),
+    "activeset_naive": ("#E69F00", "--", "s", "Active Set"),
+    "admm_naive": ("#D55E00", "--", "^", "ADMM + dense LU"),
+    "admm_minres": ("#56B4E9", ":", "^", "ADMM + MINRES"),
+    "admm_cudss": ("#CC79A7", "-.", "^", "ADMM + cuDSS"),
+    "admm_optimized": ("#009E73", "-", "^", "ADMM + ALP"),
+}
+
 METRIC_LABELS = {
     "objectives": r"$\frac{1}{2}\Vert \hat{\mathbf{L}} - \bar{\mathbf{L}} \Vert_F^2$",
     "recovery_errors": r"$\Vert \hat{\mathbf{L}} - \mathbf{L} \Vert_F / \Vert \mathbf{L} \Vert_F$",
@@ -210,7 +222,8 @@ def main() -> None:
                              "squashed by a slow outlier's full range")
     args = parser.parse_args()
 
-    mode_list = ["optimized", "naive", "minres"] if args.compare_modes else [None]
+    mode_list = (["optimized", "naive", "minres", "cudss"]
+                 if args.compare_modes else [None])
 
     if args.no_tex:
         plt.rcParams["text.usetex"] = False
@@ -236,15 +249,10 @@ def main() -> None:
     x_max_seen = 0.0
 
     for dev_idx, (dev, log_dir) in enumerate(device_dirs):
-        for mode_idx, mode in enumerate(mode_list):
-            if mode is not None:
-                linestyle = {"optimized": "-", "naive": "--", "minres": ":"}[mode]
-            else:
-                linestyle = "--" if dev == "cpu" else "-"
+        for mode in mode_list:
             # When combining --compare_devices with --compare_modes,
-            # linestyle is already spoken for by mode, so device is encoded
-            # as line width instead (CUDA thick, CPU thin) rather than
-            # silently overlapping CPU/CUDA with no visual distinction.
+            # device is encoded as line width (CUDA thick, CPU thin) rather
+            # than by linestyle.
             if args.compare_devices and args.compare_modes:
                 linewidth = 1.0 if dev == "cpu" else 2.2
             else:
@@ -252,9 +260,26 @@ def main() -> None:
             for solver in SOLVERS:
                 sub = f"{solver}_{mode}" if mode is not None else solver
                 evo = average_evolutions(log_dir, sub, args.n_runs, args.x_axis)
+                if evo is None and mode == "naive":
+                    # ipm/activeset were only benchmarked in naive mode, saved
+                    # under the plain solver name without a mode suffix.
+                    evo = average_evolutions(log_dir, solver, args.n_runs,
+                                             args.x_axis)
                 if evo is None:
                     print(f"Warning: no evolution data for {sub} in {log_dir}, skipping.")
                     continue
+                if mode is not None:
+                    style_key = f"{solver}_{mode}"
+                    color, linestyle, marker, series_label = SERIES_STYLES.get(
+                        style_key,
+                        (COLORS[solver], "-", MARKERS[solver], LABELS[solver]),
+                    )
+                else:
+                    color = COLORS[solver]
+                    linestyle = "--" if dev == "cpu" else "-"
+                    marker = MARKERS[solver]
+                    series_label = LABELS[solver]
+                label = series_label if dev_idx == 0 else None
 
                 x = evo["iterations"] if args.x_axis == "iteration" else evo["times"]
                 if len(x):
@@ -266,15 +291,11 @@ def main() -> None:
                         continue
                     y = evo[metric]
                     markevery = max(1, len(x) // 8)
-                    # Label only the first (device, mode) pass so the method
-                    # legend has one entry per solver; device/mode are decoded
-                    # by line style.
-                    label = LABELS[solver] if (dev_idx == 0 and mode_idx == 0) else None
                     ax.plot(
                         x, y,
                         label=label,
-                        color=COLORS[solver],
-                        marker=MARKERS[solver],
+                        color=color,
+                        marker=marker,
                         markevery=markevery,
                         linewidth=linewidth,
                         markersize=8,
@@ -287,7 +308,7 @@ def main() -> None:
                             y - evo[std_key],
                             y + evo[std_key],
                             alpha=0.2,
-                            color=COLORS[solver],
+                            color=color,
                         )
                     ax.set_ylabel(METRIC_LABELS.get(metric, metric.replace("_", " ").title()))
                     ax.grid(True, linestyle="--", alpha=0.6)
@@ -304,25 +325,20 @@ def main() -> None:
     x_right = min(x_max_seen, args.max_x) if args.max_x is not None else x_max_seen
     x_pad = 0.03 * x_right if x_right > 0 else 1.0
     for ax in axes:
-        ax.legend(loc="best", fontsize="small")
         ax.set_xlim(-x_pad, x_right + x_pad)
-    if args.compare_modes and args.compare_devices:
+    # One legend for the whole figure, below the panels: an in-axes legend
+    # overlaps the data region and its samples are easily mistaken for
+    # measurements.
+    handles, labels = axes[0].get_legend_handles_labels()
+    n_col = 3 if len(labels) > 4 else len(labels)
+    fig.legend(handles, labels, loc="lower center", ncol=n_col,
+               fontsize="small", frameon=False, bbox_to_anchor=(0.5, 0.0))
+    if args.compare_devices and args.compare_modes:
         style_handles = [
-            mlines.Line2D([], [], color="black", linestyle="-", label="Optimized"),
-            mlines.Line2D([], [], color="black", linestyle="--", label="Naive"),
-            mlines.Line2D([], [], color="black", linestyle=":", label="MINRES"),
             mlines.Line2D([], [], color="black", linewidth=2.2, label="CUDA"),
             mlines.Line2D([], [], color="black", linewidth=1.0, label="CPU"),
         ]
-        fig.legend(handles=style_handles, loc="upper right", ncol=5,
-                   fontsize="small", bbox_to_anchor=(0.99, 0.96))
-    elif args.compare_modes:
-        style_handles = [
-            mlines.Line2D([], [], color="black", linestyle="-", label="Optimized"),
-            mlines.Line2D([], [], color="black", linestyle="--", label="Naive"),
-            mlines.Line2D([], [], color="black", linestyle=":", label="MINRES"),
-        ]
-        fig.legend(handles=style_handles, loc="upper right", ncol=3,
+        fig.legend(handles=style_handles, loc="upper right", ncol=2,
                    fontsize="small", bbox_to_anchor=(0.99, 0.96))
     elif args.compare_devices:
         style_handles = [
@@ -337,7 +353,7 @@ def main() -> None:
         title = "_".join("cpu+cuda" if _is_device_token(t) else t
                          for t in title.split("_"))
     fig.suptitle(title)
-    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    plt.tight_layout(rect=[0, 0.07, 1, 0.97])
     plt.savefig(args.output, dpi=150)
     print(f"Saved evolution plot to {args.output}")
     svg_output = os.path.splitext(args.output)[0] + ".svg"

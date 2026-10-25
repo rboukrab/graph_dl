@@ -4,15 +4,16 @@
 # Solver/mode grid (per dim):
 #   ipm, activeset : naive mode only (their optimized/minres variants are
 #                    not part of the comparison)
-#   admm           : naive, optimized, minres AND cudss (the paper's
-#                    ADMM+solver rows vs ALP)
+#   admm           : optimized, minres AND cudss (the paper's ADMM+solver
+#                    rows vs ALP; the dense-LU 'naive' mode was removed --
+#                    cuDSS is the LU solver now)
 # Because benchmark_projection.py applies --modes to every --solver
 # (cross-product), each dim needs TWO invocations into the SAME
 # dim<d>_..._seeds1-5 dir (the dir name carries no solver/mode tag):
 #   1) --solvers ipm,activeset --modes naive
-#   2) --solvers admm         --modes naive,optimized,minres,cudss
+#   2) --solvers admm         --modes optimized,minres,cudss
 # benchmark_projection.py --save MERGES into an existing results.json, so
-# the combined file ends up with ipm, activeset, admm_naive, admm_optimized,
+# the combined file ends up with ipm, activeset, admm_optimized,
 # admm_minres and admm_cudss (single-mode invocations keep the plain solver
 # names). Both invocations calibrate --target_f1 from the same seed, so they
 # reuse the identical noise level and timings stay comparable across groups.
@@ -62,7 +63,7 @@
 
 set -uo pipefail
 
-DIMS=(20 30 40 60 80 100 125 150 200 300 500 800 1000)
+DIMS=(1000)
 DENSE_MAX_DIM=150
 DEVICES=(cuda:0)
 TARGET_F1=0.8
@@ -72,14 +73,19 @@ N_REPS=2
 N_RUNS=5
 # Per-invocation safety cap: each call loops over n_runs seeds x its
 # solver/mode combos x (warmup + n_reps + 1 evolution) passes, each up to
-# MAX_TIME. Worst case per dim: 5 combos x 5 seeds x 4 passes x 30s = 50
-# min (dims <=150), 30 min (dims >=200, 3 combos). Realistic runtime is well
-# below that (see header); 3.5h is kept for margin, so 26 invocations x 3.5h
-# = 91h is an absolute ceiling that should never be approached. If an
+# MAX_TIME. Worst case: 3 combos x 5 seeds x 4 passes x 30s = 30 min (admm
+# invocation, all dims), 20 min (dims <=150 only: ipm+activeset naive).
+# Realistic runtime is well below that (see header); 3.5h is kept for margin,
+# so 22 invocations x 3.5h = 77h is an absolute ceiling that should never be
+# approached. If an
 # invocation is killed (OOM, crash), the already-saved results from prior
 # invocations (including the merged results.json) are untouched -- only that
 # one invocation's combos are lost.
-PER_INVOCATION_TIMEOUT=3.5h
+# Overridable from the environment; e.g. PER_INVOCATION_TIMEOUT=9999h
+# effectively disables the cap (timeout never fires), handy when a dim is
+# legitimately slow and --max_time per solve is cap enough.
+PER_INVOCATION_TIMEOUT=9999h
+echo "Invocation timeout: ${PER_INVOCATION_TIMEOUT}"
 
 run_benchmark() {
   local device="$1" dim="$2" solvers="$3" modes="$4"
@@ -102,7 +108,7 @@ for device in "${DEVICES[@]}"; do
   for dim in "${DIMS[@]}"; do
     if (( dim <= DENSE_MAX_DIM )); then
       run_benchmark "${device}" "${dim}" ipm,activeset naive
-      run_benchmark "${device}" "${dim}" admm naive,optimized,minres,cudss
+      run_benchmark "${device}" "${dim}" admm optimized,minres,cudss
     else
       # Dense-solver modes are capped at DENSE_MAX_DIM (=150) to stay clear
       # of the memory-crash territory (dense KKT is 1.6 GB already at dim

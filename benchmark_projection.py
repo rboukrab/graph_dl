@@ -412,6 +412,8 @@ def main() -> None:
     parser.add_argument("--solvers", type=str, default="ipm,activeset,admm")
     parser.add_argument("--modes", type=str, default="optimized",
                         help="Comma-separated solver modes (naive, optimized, minres, cudss). "
+                             "'naive' is kept for ipm/activeset (dense KKT); for admm it "
+                             "maps to 'cudss', the sparse-direct LU replacement. "
                              "With several modes, each solver is saved as a "
                              "<solver>_<mode>/ subdirectory so runs can be "
                              "compared with plot_benchmark_projection.py "
@@ -574,6 +576,10 @@ def main() -> None:
             "aggregated": aggregated,
             "raw_results": raw_for_json,
         }
+        # Record the actual GPU model: timings are hardware-dependent, and
+        # rows merged from sweeps run on different GPUs are not comparable.
+        if device.type == "cuda":
+            payload["gpu_name"] = torch.cuda.get_device_name(device)
         if os.path.exists(out_file):
             with open(out_file) as f:
                 existing = json.load(f)
@@ -581,6 +587,14 @@ def main() -> None:
             existing["raw_results"].update(payload["raw_results"])
             existing["args"] = payload["args"]
             existing["noise_level_used"] = payload["noise_level_used"]
+            # Keep the GPU that produced the preserved rows; warn on mismatch.
+            if "gpu_name" in payload:
+                old_gpu = existing.get("gpu_name")
+                if old_gpu is not None and old_gpu != payload["gpu_name"]:
+                    print(f"WARNING: existing results were measured on "
+                          f"'{old_gpu}', this run on '{payload['gpu_name']}' -- "
+                          f"merged rows are not same-GPU comparable.")
+                existing["gpu_name"] = old_gpu or payload["gpu_name"]
             payload = existing
 
         with open(out_file, "w") as f:

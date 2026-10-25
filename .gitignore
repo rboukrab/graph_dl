@@ -47,6 +47,7 @@ htmlcov/
 # Project outputs
 logs/
 results/
+graph_dl_benchmark.zip
 *.npy
 *.pkl
 *.pt

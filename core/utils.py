@@ -69,24 +69,26 @@ def bcd_glasso(kappa, dim, K):
     return L
 
 def duplication_matrix(n):
-    index = torch.zeros((2, 0), dtype=torch.int)
+    # Vectorized replacement for the previous double loop with quadratic
+    # torch.hstack accumulation (O(n^4) copies, the constructor bottleneck
+    # at large dim). Column j of the vech layout holds the pairs (j, i),
+    # j <= i, at row j * n + i - j * (j + 1) // 2; off-diagonal pairs also
+    # map to their symmetric position j * n + i.
+    n_ar = torch.arange(n)
+    counts = n - n_ar
+    m = n * (n + 1) // 2
+    j_idx = torch.repeat_interleave(n_ar, counts)
+    i_idx = j_idx + torch.arange(m) \
+        - (torch.cumsum(counts, 0) - counts)[j_idx]
+    row_idx = j_idx * n + i_idx - j_idx * (j_idx + 1) // 2
+    col_idx1 = i_idx * n + j_idx
+    col_idx2 = j_idx * n + i_idx
+    off = col_idx1 != col_idx2
+    index = torch.cat((
+        torch.stack((row_idx, col_idx1)),
+        torch.stack((row_idx[off], col_idx2[off])),
+    ), dim=1).to(torch.int)
     value = torch.ones(n ** 2, dtype=torch.float)
-    for j in range(n):
-        for i in range(j, n):
-            row_idx = int(j * n + i - ((j + 1) * j) / 2)
-            col_idx1 = i * n + j
-            col_idx2 = j * n + i
-            if col_idx1 == col_idx2:
-                index = torch.hstack((
-                    index,
-                    torch.tensor([[row_idx], [col_idx1]])
-                ))
-            else:
-                index = torch.hstack((
-                    index,
-                    torch.tensor([[row_idx], [col_idx1]]),
-                    torch.tensor([[row_idx], [col_idx2]])
-                ))
     return index, value
 
 def generate_graph_ER(dim, p):
