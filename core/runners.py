@@ -48,6 +48,33 @@ def firm_threshold(y: torch.Tensor, lam: float, gamma: float, tau: float) -> tor
     return torch.where(abs_y <= lam / tau, torch.zeros_like(y), out)
 
 
+def mcp_prox_update(graph_learner, L_init, F_t, b, alpha, gamma, tol,
+                    max_iter, O_mask, I_mask):
+    """Solve min_{L in L} (b/2) ||L - F_t/b||_F^2 + MCP_alpha,gamma(L) via the
+    outer ADMM (firm-threshold shrinkage + ALP projection, eta = b), writing
+    the feasible iterate into graph_learner.L. Returns that iterate.
+
+    This is the paper's "Laplacian update via ADMM": the generic penalized
+    projection instance shared by all blueprint runners.
+    """
+    eta = b
+    tau = b + eta
+    Omega = L_init
+    U_dual = torch.zeros_like(L_init)
+    for _ in range(max_iter):
+        K = F_t + eta * (Omega + U_dual)
+        off = firm_threshold(K / tau, alpha, gamma, tau)
+        Phi = off * O_mask + (K / tau) * I_mask
+        graph_learner.forward(
+            F_t=Phi - U_dual, tolerance=1e-5, max_iter=1000
+        )
+        Omega = graph_learner.L.detach().clone()
+        U_dual += Omega - Phi
+        if torch.linalg.norm(Phi - Omega) < tol:
+            break
+    return Omega
+
+
 class GraphLearningRunner(ABC):
     """Base runner for graph-learning experiments.
 
@@ -803,26 +830,13 @@ class GmrfRunner(GraphLearningRunner):
         # Q-update: proximal operator of the negative log-determinant.
         Q = self.logdet_prox(L + self.J - self.Cov / self.mu, self.mu)
 
-        # L-update: outer ADMM for the generic penalized projection
-        # (b = eta = mu, per the paper's eta = b choice).
-        b = self.mu
-        eta = b
-        tau = b + eta
-        F_t = b * (Q - self.J)
-        Omega = L
-        U_dual = torch.zeros_like(L)
-        for _ in range(self.max_iter):
-            K = F_t + eta * (Omega + U_dual)
-            off = firm_threshold(K / tau, self.alpha, self.mcp_gamma, tau)
-            Phi = off * self.O_mask + (K / tau) * self.I_mask
-            self.graph_learner.forward(
-                F_t=Phi - U_dual, tolerance=1e-5, max_iter=1000
-            )
-            Omega = self.graph_learner.L.detach().clone()
-            U_dual += Omega - Phi
-            err = torch.linalg.norm(Phi - Omega)
-            if err < self.tol:
-                break
+        # L-update: generic MCP-penalized projection (b = mu), per the
+        # paper's eta = b choice.
+        mcp_prox_update(
+            self.graph_learner, L, self.mu * (Q - self.J), self.mu,
+            self.alpha, self.mcp_gamma, self.tol, self.max_iter,
+            self.O_mask, self.I_mask,
+        )
 
     def get_graph_matrix(self) -> torch.Tensor:
         # Accepted iterate, which belongs to the set of Laplacians (Omega),
@@ -832,6 +846,153 @@ class GmrfRunner(GraphLearningRunner):
     def _stat_description(self, i_test, metrics, extras):
         return (
             f"alpha={self.alpha:.3E}, mu={self.mu:.3E}, "
+            f"f-score={100*metrics['f1_score']:.2f}, "
+            f"prec={100*metrics['precision']:.2f}, "
+            f"recall={100*metrics['recall']:.2f}, "
+            f"nae={metrics['nae']:.5f}, sp={metrics['sp']}"
+        )
+
+
+# ------------------------------------------------------------------------------
+# Graph-stationary signals via commutativity (blueprint instance)
+# ------------------------------------------------------------------------------
+class StatRunner(GraphLearningRunner):
+    """Graph-stationary blueprint instance based on the commutativity Q1 L = L Q1.
+
+    Solves
+        min Tr(Q1 Cov) - log det(Q2) + MCP_alpha,gamma(L)
+            + (mu1/2) ||Q1 L - L Q1||_F^2 + (mu2/2) ||Q1 - Q2||_F^2
+        s.t. Q1 >= 0, Q2 > 0, L in L,
+    with per-block exact minimization (BSUM):
+      Q1: projected gradient on the PSD cone for the convex QP; fixed step
+          1/L with Lipschitz constant L = mu1*spread(L)^2 + mu2;
+      Q2: closed-form prox of the negative log-determinant (weight mu2);
+      L : proximal gradient on (mu1/2)||Q1 L - L Q1||_F^2, whose gradient
+          mu1 (Q1 C - C Q1), C = Q1 L - L Q1, is Lipschitz continuous with
+          constant c_t = mu1*spread(Q1)^2; each proximal-gradient step is the
+          generic MCP-penalized projection computed with ALP (mcp_prox_update).
+    """
+    name = "gs"
+    method_name = "gs"
+
+    @classmethod
+    def add_args(cls, parser: Any) -> None:
+        parser.add_argument("--admm_mode", type=str,
+                            choices=["optimized", "minres", "cudss"], default="optimized")
+        parser.add_argument("--mu1", type=float, default=1.0,
+                            help="Commutativity penalty")
+        parser.add_argument("--mu2", type=float, default=1.0,
+                            help="Q1-Q2 coupling penalty")
+        parser.add_argument("--alpha", type=float, default=1.0,
+                            help="MCP regularization parameter of the L-update")
+        parser.add_argument("--mcp_gamma", type=float, default=3.0,
+                            help="MCP concavity parameter (> 1)")
+        parser.add_argument("--tol", type=float, default=1e-4,
+                            help="Outer ADMM tolerance of each prox solve")
+        parser.add_argument("--max_iter", type=int, default=100,
+                            help="Outer ADMM max iterations of each prox solve")
+        parser.add_argument("--pg_iters", type=int, default=5,
+                            help="Proximal-gradient iterations of the L-update")
+        parser.add_argument("--q1_iters", type=int, default=100,
+                            help="Projected-gradient iterations of the Q1-update")
+        parser.add_argument("--q1_tol", type=float, default=1e-6,
+                            help="Relative-change stopping tolerance of the Q1-update")
+
+    @staticmethod
+    def project_psd(X: torch.Tensor) -> torch.Tensor:
+        lam, U = torch.linalg.eigh(X)
+        return (U * lam.clamp(min=0.0)) @ U.T
+
+    @staticmethod
+    def _eigspread(X: torch.Tensor) -> torch.Tensor:
+        lam = torch.linalg.eigvalsh(X)
+        return lam[-1] - lam[0]
+
+    def setup(self) -> None:
+        from core.graph_learn import ProjADMM
+
+        self.mu1 = self.args.mu1
+        self.mu2 = self.args.mu2
+        self.alpha = self.args.alpha
+        self.mcp_gamma = self.args.mcp_gamma
+        self.tol = self.args.tol
+        self.max_iter = self.args.max_iter
+        self.pg_iters = self.args.pg_iters
+        self.q1_iters = self.args.q1_iters
+        self.q1_tol = self.args.q1_tol
+
+        self.sim_path = self._build_sim_path("mu1", self.mu1, "mu2", self.mu2)
+
+        self.X_train = self.dataset.X.to(self.device)
+        self.Cov = self.X_train.T @ self.X_train / self.X_train.shape[0]
+
+        if self.data_set in ("stat", "smooth"):
+            self.vol = float(self.graph.W.todense().sum())
+        else:
+            self.vol = 100.0
+
+        # Valid initial Laplacian: complete graph scaled to the target volume.
+        eye = torch.eye(self.dim, device=self.device)
+        ones = torch.ones((self.dim, self.dim), device=self.device)
+        L0 = self.vol / (self.dim * (self.dim - 1)) * (self.dim * eye - ones)
+        self.graph_learner = ProjADMM(
+            dim=self.dim,
+            mode=self.args.admm_mode,
+            L=L0,
+            vol=self.vol,
+            device=self.device,
+        )
+        self.I_mask = eye.bool()
+        self.O_mask = (~eye.bool()).to(self.device)
+
+        # Symmetric initial iterates; Q2 positive definite.
+        self.Q1 = torch.eye(self.dim, device=self.device)
+        self.Q2 = torch.eye(self.dim, device=self.device)
+
+    def step(self, iteration: int) -> None:
+        L = self.graph_learner.L.detach().clone()
+
+        # Q1-update: projected gradient on the PSD cone for the convex QP
+        # Tr(Q1 Cov) + (mu1/2)||Q1 L - L Q1||_F^2 + (mu2/2)||Q1 - Q2||_F^2.
+        Lq = self.mu1 * self._eigspread(L) ** 2 + self.mu2
+        if Lq > 1e-12:
+            for _ in range(self.q1_iters):
+                C1 = self.Q1 @ L - L @ self.Q1
+                grad = (self.Cov + self.mu1 * (C1 @ L - L @ C1)
+                        + self.mu2 * (self.Q1 - self.Q2))
+                Q1_new = self.project_psd(self.Q1 - grad / Lq)
+                delta = (torch.linalg.norm(Q1_new - self.Q1)
+                         / torch.linalg.norm(self.Q1).clamp(min=1e-12))
+                self.Q1 = Q1_new
+                if delta < self.q1_tol:
+                    break
+
+        # Q2-update: closed-form proximal operator of the negative
+        # log-determinant (same prox as the GMRF runner, weight mu2).
+        self.Q2 = GmrfRunner.logdet_prox(self.Q1, self.mu2)
+
+        # L-update: proximal gradient on the commutativity penalty; each step
+        # is the generic MCP-penalized projection (constant c_t) solved by ALP.
+        c_t = self.mu1 * self._eigspread(self.Q1) ** 2
+        if c_t > 1e-12:
+            for _ in range(self.pg_iters):
+                L = self.graph_learner.L.detach().clone()
+                C = self.Q1 @ L - L @ self.Q1
+                grad = self.mu1 * (self.Q1 @ C - C @ self.Q1)
+                mcp_prox_update(
+                    self.graph_learner, L, c_t * L - grad, c_t,
+                    self.alpha, self.mcp_gamma, self.tol, self.max_iter,
+                    self.O_mask, self.I_mask,
+                )
+
+    def get_graph_matrix(self) -> torch.Tensor:
+        # Accepted iterate, which belongs to the set of Laplacians (Omega),
+        # rather than the shrinkage-step variable Phi.
+        return self.graph_learner.L
+
+    def _stat_description(self, i_test, metrics, extras):
+        return (
+            f"mu1={self.mu1:.3E}, mu2={self.mu2:.3E}, "
             f"f-score={100*metrics['f1_score']:.2f}, "
             f"prec={100*metrics['precision']:.2f}, "
             f"recall={100*metrics['recall']:.2f}, "
@@ -992,7 +1153,8 @@ class PglRunner(GraphLearningRunner):
 # Registry used by the dispatcher.
 RUNNERS: Dict[str, type] = {
     cls.name: cls
-    for cls in (GlamaRunner, SmoothRunner, PolyRunner, GmrfRunner, PglRunner)
+    for cls in (GlamaRunner, SmoothRunner, PolyRunner, GmrfRunner, StatRunner,
+                PglRunner)
 }
 
 

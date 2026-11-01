@@ -36,6 +36,10 @@ def _make_args(algorithm: str, data_set: str = "stat", dim: int = 6,
     elif algorithm == "gmrf":
         base.update({"admm_mode": "optimized", "alpha": 1.0, "mcp_gamma": 3.0,
                      "mu": 1.0, "tol": 1e-2, "max_iter": 5})
+    elif algorithm == "gs":
+        base.update({"admm_mode": "optimized", "alpha": 1.0, "mcp_gamma": 3.0,
+                     "mu1": 1.0, "mu2": 1.0, "tol": 1e-2, "max_iter": 5,
+                     "pg_iters": 2, "q1_iters": 20, "q1_tol": 1e-8})
     elif algorithm == "pgl":
         base.update({"admm_mode": "optimized", "rho": 1e-1, "eta": 1e-1,
                      "delta": 1e-4})
@@ -43,7 +47,7 @@ def _make_args(algorithm: str, data_set: str = "stat", dim: int = 6,
     return SimpleNamespace(**base)
 
 
-@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "gmrf"])
+@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "gmrf", "gs"])
 def test_runner_can_setup(name):
     args = _make_args(name)
     dataset = load_dataset(args)
@@ -64,7 +68,7 @@ def test_pgl_runner_can_setup():
 
 
 @pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
-@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "gmrf"])
+@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "gmrf", "gs"])
 def test_runner_standard_loop_smoke(name):
     args = _make_args(name)
     dataset = load_dataset(args)
@@ -89,7 +93,7 @@ def test_pgl_custom_loop_smoke():
 
 
 @pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
-@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "pgl", "gmrf"])
+@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "pgl", "gmrf", "gs"])
 def test_runner_get_graph_matrix(name):
     args = _make_args(name)
     try:
@@ -193,3 +197,57 @@ def test_gmrf_laplacian_feasible_and_objective_decreases():
 
     # The GMRF objective decreases over the first steps.
     assert objective(L) < objective(L0)
+
+
+@pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
+def test_gs_q1_descent_feasibility_and_objective():
+    args = _make_args("gs", dim=8, n_samples=100)
+    dataset = load_dataset(args)
+    runner = RUNNERS["gs"](args, dataset, torch.device("cpu"))
+    runner.setup()
+
+    alpha, gamma = runner.alpha, runner.mcp_gamma
+
+    def q1_objective(Q1, L, Q2):
+        comm = Q1 @ L - L @ Q1
+        return (torch.trace(runner.Cov @ Q1) + 0.5 * runner.mu1 * (comm ** 2).sum()
+                + 0.5 * runner.mu2 * ((Q1 - Q2) ** 2).sum())
+
+    def split_objective(Q1, Q2, L):
+        comm = Q1 @ L - L @ Q1
+        off = L * runner.O_mask
+        mcp = torch.where(off.abs() <= gamma * alpha,
+                          alpha * off.abs() - off ** 2 / (2 * gamma),
+                          gamma * alpha ** 2 / 2)
+        return (torch.trace(runner.Cov @ Q1) - torch.logdet(Q2)
+                + 0.5 * runner.mu1 * (comm ** 2).sum()
+                + 0.5 * runner.mu2 * ((Q1 - Q2) ** 2).sum() + mcp.sum())
+
+    eye = torch.eye(args.dim)
+    L0 = runner.vol / (args.dim * (args.dim - 1)) * (
+        args.dim * eye - torch.ones((args.dim, args.dim)))
+
+    # One Q1 pass from the identity must not increase the Q1 subproblem
+    # objective (holding L and the previous Q2 fixed).
+    L_init = runner.graph_learner.L.detach().clone()
+    Q2_old = runner.Q2.detach().clone()
+    q1_before = q1_objective(runner.Q1, L_init, Q2_old)
+    runner.step(0)
+    q1_after = q1_objective(runner.Q1, L_init, Q2_old)
+    assert q1_after <= q1_before + 1e-9
+
+    for i in range(1, 3):
+        runner.step(i)
+    L = runner.get_graph_matrix()
+
+    # Feasibility of the Laplacian block and the precision blocks.
+    assert torch.allclose(L, L.T, atol=1e-6)
+    assert torch.abs(L.sum(dim=1)).max() < 1e-4
+    assert (L * runner.O_mask).max() <= 1e-6
+    assert abs(torch.trace(L).item() - runner.vol) / runner.vol < 1e-4
+    assert torch.linalg.eigvalsh(runner.Q1)[0] >= -1e-6
+    assert torch.linalg.eigvalsh(runner.Q2)[0] > 0
+
+    # The split objective decreases over the first steps.
+    assert split_objective(runner.Q1, runner.Q2, L) < split_objective(
+        torch.eye(args.dim), torch.eye(args.dim), L0)

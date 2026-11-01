@@ -25,7 +25,7 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--algorithm",
         type=str,
-        choices=["glama", "smooth", "poly", "pgl", "gmrf"],
+        choices=["glama", "smooth", "poly", "pgl", "gmrf", "gs"],
         required=True,
         help="Graph-learning algorithm to grid-search",
     )
@@ -224,12 +224,55 @@ def _add_gmrf_args(parser: argparse.ArgumentParser) -> None:
                         help="Outer ADMM max iterations of the L-update")
 
 
+def _add_gs_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--min_alpha_exp", type=float, default=0.0,
+        help="log10(min alpha)"
+    )
+    parser.add_argument(
+        "--max_alpha_exp", type=float, default=0.0,
+        help="log10(max alpha)"
+    )
+    parser.add_argument("--n_alpha", type=int, default=1, help="Number of alpha values")
+    parser.add_argument(
+        "--min_mu1_exp", type=float, default=0.0,
+        help="log10(min mu1)"
+    )
+    parser.add_argument(
+        "--max_mu1_exp", type=float, default=0.0,
+        help="log10(max mu1)"
+    )
+    parser.add_argument("--n_mu1", type=int, default=1, help="Number of mu1 values")
+    parser.add_argument("--mu2", type=float, default=1.0,
+                        help="Q1-Q2 coupling penalty (fixed across the grid)")
+    parser.add_argument(
+        "--mcp_gamma", type=float, default=3.0,
+        help="MCP concavity parameter (fixed across the grid)"
+    )
+    parser.add_argument(
+        "--admm_mode", type=str,
+        choices=["optimized", "minres", "cudss"], default="optimized",
+        help="Inner solver (ALP projection) mode",
+    )
+    parser.add_argument("--tol", type=float, default=1e-4,
+                        help="Outer ADMM tolerance of each prox solve")
+    parser.add_argument("--max_iter", type=int, default=100,
+                        help="Outer ADMM max iterations of each prox solve")
+    parser.add_argument("--pg_iters", type=int, default=5,
+                        help="Proximal-gradient iterations of the L-update")
+    parser.add_argument("--q1_iters", type=int, default=100,
+                        help="Projected-gradient iterations of the Q1-update")
+    parser.add_argument("--q1_tol", type=float, default=1e-6,
+                        help="Relative-change stopping tolerance of the Q1-update")
+
+
 _ALGO_ARG_ADDERS = {
     "glama": _add_glama_args,
     "smooth": _add_smooth_args,
     "poly": _add_poly_args,
     "pgl": _add_pgl_args,
     "gmrf": _add_gmrf_args,
+    "gs": _add_gs_args,
 }
 
 
@@ -307,6 +350,8 @@ def main() -> None:
         seeds = range(1, 11)
     elif algorithm == "gmrf":
         seeds = range(1, 11)
+    elif algorithm == "gs":
+        seeds = range(1, 11)
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
@@ -347,6 +392,20 @@ def main() -> None:
             "--admm_mode", str(args.admm_mode),
             "--tol", str(args.tol),
             "--max_iter", str(args.max_iter),
+        ])
+    elif algorithm == "gs":
+        xs = np.logspace(args.min_alpha_exp, args.max_alpha_exp, args.n_alpha)
+        ys = np.logspace(args.min_mu1_exp, args.max_mu1_exp, args.n_mu1)
+        x_name, y_name = "--alpha", "--mu1"
+        base_cmd.extend([
+            "--mu2", str(args.mu2),
+            "--mcp_gamma", str(args.mcp_gamma),
+            "--admm_mode", str(args.admm_mode),
+            "--tol", str(args.tol),
+            "--max_iter", str(args.max_iter),
+            "--pg_iters", str(args.pg_iters),
+            "--q1_iters", str(args.q1_iters),
+            "--q1_tol", str(args.q1_tol),
         ])
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")

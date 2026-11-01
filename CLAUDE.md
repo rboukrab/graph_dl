@@ -22,7 +22,7 @@ Standalone experiment scripts write results to `logs/<experiment-name>/` as `.np
 `subprocess.run([sys.executable, ...])` (see `core/config.script_cmd`) so they work on Windows too.
 
 Key entry points:
-- `run_gl.py --algorithm {glama,smooth,poly,gmrf,pgl} --data_set {stat,fmri} ...` — unified dispatcher for the
+- `run_gl.py --algorithm {glama,smooth,poly,gmrf,gs,pgl} --data_set {stat,fmri} ...` — unified dispatcher for the
   graph-learning runners; run `python run_gl.py --help` for algorithm-specific args.
 - `joint_dl_gl.py --method {smooth,stationary,heatdiff} --graph_learn {known,bcd,gama,glama,admm}` — joint
   dictionary + graph learning.
@@ -68,7 +68,7 @@ target dimension `dim` and an initial Laplacian `L`:
 
 `GraphLearningRunner` (ABC) factors out the common experiment loop (iterate, periodically evaluate against
 `dataset.graph`, save metrics) shared by all `run_gl.py` algorithms. Each concrete runner
-(`GlamaRunner`, `SmoothRunner`, `PolyRunner`, `GmrfRunner`, `PglRunner`) implements `add_args`, `setup`, `step`, and
+(`GlamaRunner`, `SmoothRunner`, `PolyRunner`, `GmrfRunner`, `StatRunner`, `PglRunner`) implements `add_args`, `setup`, `step`, and
 `get_graph_matrix`; `class.name` is used for CLI dispatch in `run_gl.py` and `class.method_name` for the log
 directory name via `core/config.gl_experiment_path`.
 - `GmrfRunner` (`--algorithm gmrf`) is the GMRF instance of the alternating-with-Laplacian-updates blueprint:
@@ -77,6 +77,12 @@ directory name via `core/config.gl_experiment_path`.
   (`GmrfRunner.logdet_prox`), and the L-update is the generic MCP-penalized projection (outer ADMM with
   firm-threshold shrinkage, `firm_threshold`, plus the ALP projection step) with `b = eta = mu`. Grid search
   sweeps `--alpha` x `--mu` at fixed `--mcp_gamma` (default 3) over 10 seeds.
+- `StatRunner` (`--algorithm gs`) is the graph-stationary blueprint instance based on the commutativity
+  `Q1 L = L Q1`: `min Tr(Q1 Cov) - log det(Q2) + MCP(L) + (mu1/2)||Q1 L - L Q1||^2 + (mu2/2)||Q1 - Q2||^2`
+  with per-block minimization — Q1 by projected gradient on the PSD cone (fixed step 1/(mu1*spread(L)^2 + mu2)),
+  Q2 by `GmrfRunner.logdet_prox`, and L by proximal gradient on the commutativity penalty whose steps are
+  generic MCP-penalized projections solved by ALP (`mcp_prox_update`, shared with the GMRF runner).
+  Grid search sweeps `--alpha` x `--mu1` at fixed `--mu2`/`--mcp_gamma` over 10 seeds.
 
 ### Other `core/` modules
 
