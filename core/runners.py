@@ -37,6 +37,17 @@ from core.utils import (
 )
 
 
+def firm_threshold(y: torch.Tensor, lam: float, gamma: float, tau: float) -> torch.Tensor:
+    """Firm thresholding T_{lam,gamma,tau}, element-wise prox of lam * MCP_gamma.
+
+    argmin_x lam * MCP_gamma(x) + tau / 2 * (x - y)^2, requires gamma * tau > 1.
+    """
+    abs_y = y.abs()
+    shrunk = torch.sign(y) * (abs_y - lam / tau) / (1 - 1 / (gamma * tau))
+    out = torch.where(abs_y > gamma * lam, y, shrunk)
+    return torch.where(abs_y <= lam / tau, torch.zeros_like(y), out)
+
+
 class GraphLearningRunner(ABC):
     """Base runner for graph-learning experiments.
 
@@ -536,10 +547,7 @@ class PolyRunner(GraphLearningRunner):
     def firm_threshold(y: torch.Tensor, lam: float, gamma: float, tau: float) -> torch.Tensor:
         """Proximal operator of lam * MCP_gamma with quadratic weight tau, i.e.
         argmin_x lam * MCP_gamma(x) + tau / 2 * (x - y)^2, element-wise (requires gamma * tau > 1)."""
-        abs_y = y.abs()
-        shrunk = torch.sign(y) * (abs_y - lam / tau) / (1 - 1 / (gamma * tau))
-        out = torch.where(abs_y > gamma * lam, y, shrunk)
-        return torch.where(abs_y <= lam / tau, torch.zeros_like(y), out)
+        return firm_threshold(y, lam, gamma, tau)
 
     def setup(self) -> None:
         from core.graph_learn import ProjADMM
@@ -714,6 +722,124 @@ class PolyRunner(GraphLearningRunner):
 
 
 # ------------------------------------------------------------------------------
+# GMRF (Laplian-constrained Gaussian Markov random field)
+# ------------------------------------------------------------------------------
+class GmrfRunner(GraphLearningRunner):
+    """GMRF instance of the alternating-with-Laplacian-updates blueprint.
+
+    Solves min_{L in L} Tr(L Cov) - log det(L + J) + MCP_alpha,gamma(L), with
+    J = (1/D) 11^T, via exact alternating minimization over the split variables
+    (Q, L) with quadratic penalty mu:
+
+      Q-update: prox of the negative log-determinant,
+                Q = U diag(nu) U^T, nu_i = (lambda_i + sqrt(lambda_i^2 + 4/mu))/2,
+                with (lambda, U) the eigendecomposition of L + J - Cov/mu.
+      L-update: the generic penalized projection (b = mu, F = mu (Q - J)) solved
+                with the outer ADMM (firm-threshold shrinkage + ALP projection).
+    """
+    name = "gmrf"
+    method_name = "gmrf"
+
+    @classmethod
+    def add_args(cls, parser: Any) -> None:
+        parser.add_argument("--admm_mode", type=str,
+                            choices=["optimized", "minres", "cudss"], default="optimized")
+        parser.add_argument("--alpha", type=float, default=1.0,
+                            help="MCP regularization parameter of the L-update")
+        parser.add_argument("--mcp_gamma", type=float, default=3.0,
+                            help="MCP concavity parameter (> 1)")
+        parser.add_argument("--mu", type=float, default=1.0,
+                            help="Q-L quadratic splitting penalty")
+        parser.add_argument("--tol", type=float, default=1e-4,
+                            help="Outer ADMM tolerance of the L-update")
+        parser.add_argument("--max_iter", type=int, default=100,
+                            help="Outer ADMM max iterations of the L-update")
+
+    @staticmethod
+    def logdet_prox(X: torch.Tensor, mu: float) -> torch.Tensor:
+        """Prox of -log det with weight mu: argmin_Q -log det Q + mu/2 ||Q - X||_F^2."""
+        lam, U = torch.linalg.eigh(X)
+        nu = 0.5 * (lam + torch.sqrt(lam * lam + 4.0 / mu))
+        return (U * nu) @ U.T
+
+    def setup(self) -> None:
+        from core.graph_learn import ProjADMM
+
+        self.alpha = self.args.alpha
+        self.mcp_gamma = self.args.mcp_gamma
+        self.mu = self.args.mu
+        self.tol = self.args.tol
+        self.max_iter = self.args.max_iter
+
+        self.sim_path = self._build_sim_path("alpha", self.alpha, "mu", self.mu)
+
+        self.X_train = self.dataset.X.to(self.device)
+        self.Cov = self.X_train.T @ self.X_train / self.X_train.shape[0]
+        self.J = torch.ones((self.dim, self.dim), device=self.device) / self.dim
+
+        if self.data_set in ("stat", "smooth"):
+            self.vol = float(self.graph.W.todense().sum())
+        else:
+            self.vol = 100.0
+
+        # Valid initial Laplacian: complete graph scaled to the target volume
+        # (row sums 0, off-diagonal < 0, trace = vol).
+        eye = torch.eye(self.dim, device=self.device)
+        ones = torch.ones((self.dim, self.dim), device=self.device)
+        L0 = self.vol / (self.dim * (self.dim - 1)) * (self.dim * eye - ones)
+        self.graph_learner = ProjADMM(
+            dim=self.dim,
+            mode=self.args.admm_mode,
+            L=L0,
+            vol=self.vol,
+            device=self.device,
+        )
+        self.I_mask = eye.bool()
+        self.O_mask = (~eye.bool()).to(self.device)
+
+    def step(self, iteration: int) -> None:
+        L = self.graph_learner.L.detach().clone()
+
+        # Q-update: proximal operator of the negative log-determinant.
+        Q = self.logdet_prox(L + self.J - self.Cov / self.mu, self.mu)
+
+        # L-update: outer ADMM for the generic penalized projection
+        # (b = eta = mu, per the paper's eta = b choice).
+        b = self.mu
+        eta = b
+        tau = b + eta
+        F_t = b * (Q - self.J)
+        Omega = L
+        U_dual = torch.zeros_like(L)
+        for _ in range(self.max_iter):
+            K = F_t + eta * (Omega + U_dual)
+            off = firm_threshold(K / tau, self.alpha, self.mcp_gamma, tau)
+            Phi = off * self.O_mask + (K / tau) * self.I_mask
+            self.graph_learner.forward(
+                F_t=Phi - U_dual, tolerance=1e-5, max_iter=1000
+            )
+            Omega = self.graph_learner.L.detach().clone()
+            U_dual += Omega - Phi
+            err = torch.linalg.norm(Phi - Omega)
+            if err < self.tol:
+                break
+
+    def get_graph_matrix(self) -> torch.Tensor:
+        # Accepted iterate, which belongs to the set of Laplacians (Omega),
+        # rather than the shrinkage-step variable Phi.
+        return self.graph_learner.L
+
+    def _stat_description(self, i_test, metrics, extras):
+        return (
+            f"alpha={self.alpha:.3E}, mu={self.mu:.3E}, "
+            f"f-score={100*metrics['f1_score']:.2f}, "
+            f"prec={100*metrics['precision']:.2f}, "
+            f"recall={100*metrics['recall']:.2f}, "
+            f"nae={metrics['nae']:.5f}, sp={metrics['sp']}"
+        )
+
+
+# ------------------------------------------------------------------------------
 # Pairwise graph learning (PGL)
 # ------------------------------------------------------------------------------
 class PglRunner(GraphLearningRunner):
@@ -866,7 +992,7 @@ class PglRunner(GraphLearningRunner):
 # Registry used by the dispatcher.
 RUNNERS: Dict[str, type] = {
     cls.name: cls
-    for cls in (GlamaRunner, SmoothRunner, PolyRunner, PglRunner)
+    for cls in (GlamaRunner, SmoothRunner, PolyRunner, GmrfRunner, PglRunner)
 }
 
 

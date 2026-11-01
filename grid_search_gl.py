@@ -25,7 +25,7 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--algorithm",
         type=str,
-        choices=["glama", "smooth", "poly", "pgl"],
+        choices=["glama", "smooth", "poly", "pgl", "gmrf"],
         required=True,
         help="Graph-learning algorithm to grid-search",
     )
@@ -190,11 +190,46 @@ def _add_pgl_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--n_eta", type=int, default=8, help="Number of eta values")
 
 
+def _add_gmrf_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--min_alpha_exp", type=float, default=0.0,
+        help="log10(min alpha)"
+    )
+    parser.add_argument(
+        "--max_alpha_exp", type=float, default=0.0,
+        help="log10(max alpha)"
+    )
+    parser.add_argument("--n_alpha", type=int, default=1, help="Number of alpha values")
+    parser.add_argument(
+        "--min_mu_exp", type=float, default=0.0,
+        help="log10(min mu)"
+    )
+    parser.add_argument(
+        "--max_mu_exp", type=float, default=0.0,
+        help="log10(max mu)"
+    )
+    parser.add_argument("--n_mu", type=int, default=1, help="Number of mu values")
+    parser.add_argument(
+        "--mcp_gamma", type=float, default=3.0,
+        help="MCP concavity parameter (fixed across the grid)"
+    )
+    parser.add_argument(
+        "--admm_mode", type=str,
+        choices=["optimized", "minres", "cudss"], default="optimized",
+        help="Inner solver (ALP projection) mode",
+    )
+    parser.add_argument("--tol", type=float, default=1e-4,
+                        help="Outer ADMM tolerance of the L-update")
+    parser.add_argument("--max_iter", type=int, default=100,
+                        help="Outer ADMM max iterations of the L-update")
+
+
 _ALGO_ARG_ADDERS = {
     "glama": _add_glama_args,
     "smooth": _add_smooth_args,
     "poly": _add_poly_args,
     "pgl": _add_pgl_args,
+    "gmrf": _add_gmrf_args,
 }
 
 
@@ -270,6 +305,8 @@ def main() -> None:
         seeds = range(1, 301)
     elif algorithm == "pgl":
         seeds = range(1, 11)
+    elif algorithm == "gmrf":
+        seeds = range(1, 11)
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 
@@ -301,6 +338,16 @@ def main() -> None:
         xs = np.logspace(args.min_rho_exp, args.max_rho_exp, args.n_rho)
         ys = np.logspace(args.min_eta_exp, args.max_eta_exp, args.n_eta)
         x_name, y_name = "--rho", "--eta"
+    elif algorithm == "gmrf":
+        xs = np.logspace(args.min_alpha_exp, args.max_alpha_exp, args.n_alpha)
+        ys = np.logspace(args.min_mu_exp, args.max_mu_exp, args.n_mu)
+        x_name, y_name = "--alpha", "--mu"
+        base_cmd.extend([
+            "--mcp_gamma", str(args.mcp_gamma),
+            "--admm_mode", str(args.admm_mode),
+            "--tol", str(args.tol),
+            "--max_iter", str(args.max_iter),
+        ])
     else:
         raise ValueError(f"Unsupported algorithm: {algorithm}")
 

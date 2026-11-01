@@ -22,7 +22,7 @@ Standalone experiment scripts write results to `logs/<experiment-name>/` as `.np
 `subprocess.run([sys.executable, ...])` (see `core/config.script_cmd`) so they work on Windows too.
 
 Key entry points:
-- `run_gl.py --algorithm {glama,smooth,poly,pgl} --data_set {stat,fmri} ...` — unified dispatcher for the four
+- `run_gl.py --algorithm {glama,smooth,poly,gmrf,pgl} --data_set {stat,fmri} ...` — unified dispatcher for the
   graph-learning runners; run `python run_gl.py --help` for algorithm-specific args.
 - `joint_dl_gl.py --method {smooth,stationary,heatdiff} --graph_learn {known,bcd,gama,glama,admm}` — joint
   dictionary + graph learning.
@@ -68,9 +68,15 @@ target dimension `dim` and an initial Laplacian `L`:
 
 `GraphLearningRunner` (ABC) factors out the common experiment loop (iterate, periodically evaluate against
 `dataset.graph`, save metrics) shared by all `run_gl.py` algorithms. Each concrete runner
-(`GlamaRunner`, `SmoothRunner`, `PolyRunner`, `PglRunner`) implements `add_args`, `setup`, `step`, and
+(`GlamaRunner`, `SmoothRunner`, `PolyRunner`, `GmrfRunner`, `PglRunner`) implements `add_args`, `setup`, `step`, and
 `get_graph_matrix`; `class.name` is used for CLI dispatch in `run_gl.py` and `class.method_name` for the log
 directory name via `core/config.gl_experiment_path`.
+- `GmrfRunner` (`--algorithm gmrf`) is the GMRF instance of the alternating-with-Laplacian-updates blueprint:
+  it solves `min_{L in L} Tr(L Cov) - log det(L + 11^T/D) + MCP_alpha,gamma(L)` by exact alternating minimization
+  over a split `(Q, L)` with penalty `mu`: the Q-update is the closed-form prox of the negative log-determinant
+  (`GmrfRunner.logdet_prox`), and the L-update is the generic MCP-penalized projection (outer ADMM with
+  firm-threshold shrinkage, `firm_threshold`, plus the ALP projection step) with `b = eta = mu`. Grid search
+  sweeps `--alpha` x `--mu` at fixed `--mcp_gamma` (default 3) over 10 seeds.
 
 ### Other `core/` modules
 

@@ -255,7 +255,7 @@ def main() -> None:
             ax.set_xlim(x_lo, x_hi)
             ax.set_yscale("log")
             if metric == "gpumem":
-                ax.set_ylim(bottom=1)
+                ax.set_ylim(bottom=7)
             ax.grid(True, which="both", linestyle="--", alpha=0.6)
 
     # Shared legend below the panels: an in-axes legend overlaps the data

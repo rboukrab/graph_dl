@@ -33,6 +33,9 @@ def _make_args(algorithm: str, data_set: str = "stat", dim: int = 6,
         base.update({"admm_mode": "optimized", "deg": 1, "alpha": 1.0,
                      "penalty": "mcp", "mcp_gamma": 3.0, "eta_scale": 1.0,
                      "tol": 1e-2, "max_iter": 2})
+    elif algorithm == "gmrf":
+        base.update({"admm_mode": "optimized", "alpha": 1.0, "mcp_gamma": 3.0,
+                     "mu": 1.0, "tol": 1e-2, "max_iter": 5})
     elif algorithm == "pgl":
         base.update({"admm_mode": "optimized", "rho": 1e-1, "eta": 1e-1,
                      "delta": 1e-4})
@@ -40,7 +43,7 @@ def _make_args(algorithm: str, data_set: str = "stat", dim: int = 6,
     return SimpleNamespace(**base)
 
 
-@pytest.mark.parametrize("name", ["glama", "smooth", "poly"])
+@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "gmrf"])
 def test_runner_can_setup(name):
     args = _make_args(name)
     dataset = load_dataset(args)
@@ -61,7 +64,7 @@ def test_pgl_runner_can_setup():
 
 
 @pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
-@pytest.mark.parametrize("name", ["glama", "smooth", "poly"])
+@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "gmrf"])
 def test_runner_standard_loop_smoke(name):
     args = _make_args(name)
     dataset = load_dataset(args)
@@ -86,7 +89,7 @@ def test_pgl_custom_loop_smoke():
 
 
 @pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
-@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "pgl"])
+@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "pgl", "gmrf"])
 def test_runner_get_graph_matrix(name):
     args = _make_args(name)
     try:
@@ -110,3 +113,83 @@ def test_load_dataset_fmri():
     args = SimpleNamespace(algorithm="glama", data_set="fmri", dim=8, n_samples=30, seed=0)
     dataset = load_dataset(args)
     assert isinstance(dataset, FlankerDataset)
+
+
+# ---------------------------------------------------------------------------
+# GMRF runner-specific checks
+# ---------------------------------------------------------------------------
+
+def test_firm_threshold_regimes():
+    from core.runners import firm_threshold
+
+    alpha, gamma, tau = 0.3, 3.0, 2.0  # gamma * tau = 6 > 1
+    # Dead zone |y| <= alpha/tau maps to 0.
+    y_dead = torch.tensor([-alpha / tau, 0.5 * alpha / tau])
+    assert torch.all(firm_threshold(y_dead, alpha, gamma, tau) == 0)
+    # Middle zone shrinks toward zero.
+    y_mid = torch.tensor([0.5 * (alpha / tau + gamma * alpha)])
+    out_mid = firm_threshold(y_mid, alpha, gamma, tau)
+    expected = (y_mid - alpha / tau) / (1 - 1 / (gamma * tau))
+    assert torch.allclose(out_mid, expected)
+    assert torch.all(out_mid.abs() < y_mid.abs())
+    # Zone |y| > gamma*alpha is not penalized (identity).
+    y_big = torch.tensor([gamma * alpha + 0.1, -(gamma * alpha + 0.1)])
+    assert torch.allclose(firm_threshold(y_big, alpha, gamma, tau), y_big)
+    # gamma -> inf reduces to soft thresholding with threshold alpha/tau.
+    y = torch.linspace(-1.0, 1.0, 21)
+    out = firm_threshold(y, alpha, float("inf"), tau)
+    soft = torch.sign(y) * torch.clamp(y.abs() - alpha / tau, min=0.0)
+    assert torch.allclose(out, soft, atol=1e-6)
+
+
+@pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
+def test_logdet_prox_optimality():
+    torch.manual_seed(0)
+    dim, mu = 6, 1.5
+    A = torch.randn(dim, dim)
+    X = 0.5 * (A + A.T)
+    Q = RUNNERS["gmrf"].logdet_prox(X, mu)
+    assert torch.linalg.eigvalsh(Q)[0] > 0  # positive definite
+    # First-order optimality of min_Q -log det Q + mu/2 ||Q - X||_F^2:
+    # grad = -Q^{-1} + mu (Q - X) = 0.
+    grad = -torch.linalg.inv(Q) + mu * (Q - X)
+    assert torch.linalg.norm(grad) / torch.linalg.norm(Q) < 1e-4
+
+
+@pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
+def test_gmrf_laplacian_feasible_and_objective_decreases():
+    args = _make_args("gmrf", dim=8, n_samples=100)
+    dataset = load_dataset(args)
+    runner = RUNNERS["gmrf"](args, dataset, torch.device("cpu"))
+    runner.setup()
+
+    alpha, gamma = runner.alpha, runner.mcp_gamma
+
+    def objective(L):
+        off = L * runner.O_mask
+        mcp = torch.where(
+            off.abs() <= gamma * alpha,
+            alpha * off.abs() - off ** 2 / (2 * gamma),
+            gamma * alpha ** 2 / 2,
+        )
+        return (torch.trace(runner.Cov @ L) - torch.logdet(L + runner.J)
+                + mcp.sum())
+
+    eye = torch.eye(args.dim)
+    L0 = runner.vol / (args.dim * (args.dim - 1)) * (
+        args.dim * eye - torch.ones((args.dim, args.dim))
+    )
+
+    for i in range(3):
+        runner.step(i)
+    L = runner.get_graph_matrix()
+
+    # Feasibility: symmetric, zero row sums, non-positive off-diagonals, trace = vol.
+    assert torch.allclose(L, L.T, atol=1e-6)
+    assert torch.abs(L.sum(dim=1)).max() < 1e-4
+    off_diag = L * runner.O_mask
+    assert off_diag.max() <= 1e-6
+    assert abs(torch.trace(L).item() - runner.vol) / runner.vol < 1e-4
+
+    # The GMRF objective decreases over the first steps.
+    assert objective(L) < objective(L0)
