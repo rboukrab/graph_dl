@@ -893,7 +893,7 @@ class StatRunner(GraphLearningRunner):
                             help="Outer ADMM max iterations of each prox solve")
         parser.add_argument("--pg_iters", type=int, default=5,
                             help="Proximal-gradient iterations of the L-update")
-        parser.add_argument("--q1_iters", type=int, default=100,
+        parser.add_argument("--q1_iters", type=int, default=25,
                             help="Projected-gradient iterations of the Q1-update")
         parser.add_argument("--q1_tol", type=float, default=1e-6,
                             help="Relative-change stopping tolerance of the Q1-update")
@@ -921,7 +921,9 @@ class StatRunner(GraphLearningRunner):
         self.q1_iters = self.args.q1_iters
         self.q1_tol = self.args.q1_tol
 
-        self.sim_path = self._build_sim_path("mu1", self.mu1, "mu2", self.mu2)
+        self.sim_path = self._build_sim_path(
+            "alpha", self.alpha, "mu1", self.mu1, "mu2", self.mu2
+        )
 
         self.X_train = self.dataset.X.to(self.device)
         self.Cov = self.X_train.T @ self.X_train / self.X_train.shape[0]
@@ -931,10 +933,25 @@ class StatRunner(GraphLearningRunner):
         else:
             self.vol = 100.0
 
-        # Valid initial Laplacian: complete graph scaled to the target volume.
+        # Initial Laplacian: kNN graph of |Cov| scaled to the target volume.
+        # The complete graph commutes with every Q1, so the commutativity term
+        # and its L-gradient vanish at that init and the iterates crawl; the
+        # kNN init breaks the fixed point. Fall back to the complete graph if
+        # the kNN graph has no mass (e.g. zero covariance rows).
         eye = torch.eye(self.dim, device=self.device)
         ones = torch.ones((self.dim, self.dim), device=self.device)
-        L0 = self.vol / (self.dim * (self.dim - 1)) * (self.dim * eye - ones)
+        k = min(5, self.dim - 1)
+        A = self.Cov.abs()
+        A.fill_diagonal_(0)
+        idx = A.topk(k, dim=1).indices
+        W = torch.zeros_like(A)
+        rows = torch.arange(self.dim, device=self.device).unsqueeze(1).expand_as(idx)
+        W[rows, idx] = A[rows, idx]
+        W = torch.maximum(W, W.T)
+        L0 = torch.diag(W.sum(1)) - W
+        if float(torch.trace(L0)) <= 0:
+            L0 = self.dim * eye - ones
+        L0 = L0 * (self.vol / torch.trace(L0))
         self.graph_learner = ProjADMM(
             dim=self.dim,
             mode=self.args.admm_mode,
@@ -945,9 +962,16 @@ class StatRunner(GraphLearningRunner):
         self.I_mask = eye.bool()
         self.O_mask = (~eye.bool()).to(self.device)
 
-        # Symmetric initial iterates; Q2 positive definite.
-        self.Q1 = torch.eye(self.dim, device=self.device)
-        self.Q2 = torch.eye(self.dim, device=self.device)
+        # Symmetric initial iterates for the precision blocks; the inverse
+        # regularized covariance keeps Q1/Q2 consistent with the kNN initial
+        # Laplacian (an identity init sparsifies real edges away, cf. the
+        # dim-50 diagnostics). Ridge proportional to the mean covariance
+        # eigenvalue keeps it scale-adaptive and handles rank-deficient Cov.
+        ridge = 0.1 * float(torch.trace(self.Cov)) / self.dim
+        self.Q1 = torch.linalg.inv(
+            self.Cov + ridge * torch.eye(self.dim, device=self.device)
+        )
+        self.Q2 = self.Q1.clone()
 
     def step(self, iteration: int) -> None:
         L = self.graph_learner.L.detach().clone()

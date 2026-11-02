@@ -83,6 +83,14 @@ directory name via `core/config.gl_experiment_path`.
   Q2 by `GmrfRunner.logdet_prox`, and L by proximal gradient on the commutativity penalty whose steps are
   generic MCP-penalized projections solved by ALP (`mcp_prox_update`, shared with the GMRF runner).
   Grid search sweeps `--alpha` x `--mu1` at fixed `--mu2`/`--mcp_gamma` over 10 seeds.
+  Initialization matters (dim-50 diagnostics): L starts from a kNN graph of |Cov| scaled to the volume —
+  the complete graph commutes with every Q1, so it is a fixed point of the commutativity term and the
+  iterates crawl — and Q1/Q2 start from the inverse regularized covariance (identity Q-init sparsifies real
+  edges away). Exact Q1 minimization (q1_iters>=100) freezes L early; the default q1_iters=25 truncates the
+  Q1 loop, which works better in practice.
+- `GspalmRunner` (`--algorithm gsp`) was removed: a PALM variant (one proximal-gradient step per block per
+  sweep) reached the same dim-50 plateau F1 (~0.61) as BSUM at ~3x cheaper sweeps, but produced a much denser
+  graph; BSUM was kept for its stronger MCP sparsification.
 
 ### Other `core/` modules
 

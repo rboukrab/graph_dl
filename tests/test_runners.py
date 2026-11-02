@@ -47,11 +47,20 @@ def _make_args(algorithm: str, data_set: str = "stat", dim: int = 6,
     return SimpleNamespace(**base)
 
 
-@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "gmrf", "gs"])
+@pytest.mark.parametrize("name", ["glama", "smooth", "poly", "gmrf"])
 def test_runner_can_setup(name):
     args = _make_args(name)
     dataset = load_dataset(args)
     runner = RUNNERS[name](args, dataset, torch.device("cpu"))
+    runner.setup()
+    assert runner.sim_path != ""
+
+
+@pytest.mark.skipif(not cpu_lapack_available(), reason="PyTorch build lacks LAPACK")
+def test_gs_runner_can_setup():
+    args = _make_args("gs")
+    dataset = load_dataset(args)
+    runner = RUNNERS["gs"](args, dataset, torch.device("cpu"))
     runner.setup()
     assert runner.sim_path != ""
 
@@ -224,8 +233,7 @@ def test_gs_q1_descent_feasibility_and_objective():
                 + 0.5 * runner.mu2 * ((Q1 - Q2) ** 2).sum() + mcp.sum())
 
     eye = torch.eye(args.dim)
-    L0 = runner.vol / (args.dim * (args.dim - 1)) * (
-        args.dim * eye - torch.ones((args.dim, args.dim)))
+    L0 = runner.graph_learner.L.detach().clone()
 
     # One Q1 pass from the identity must not increase the Q1 subproblem
     # objective (holding L and the previous Q2 fixed).

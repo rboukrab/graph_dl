@@ -260,7 +260,7 @@ def _add_gs_args(parser: argparse.ArgumentParser) -> None:
                         help="Outer ADMM max iterations of each prox solve")
     parser.add_argument("--pg_iters", type=int, default=5,
                         help="Proximal-gradient iterations of the L-update")
-    parser.add_argument("--q1_iters", type=int, default=100,
+    parser.add_argument("--q1_iters", type=int, default=25,
                         help="Projected-gradient iterations of the Q1-update")
     parser.add_argument("--q1_tol", type=float, default=1e-6,
                         help="Relative-change stopping tolerance of the Q1-update")
@@ -396,9 +396,9 @@ def main() -> None:
     elif algorithm == "gs":
         xs = np.logspace(args.min_alpha_exp, args.max_alpha_exp, args.n_alpha)
         ys = np.logspace(args.min_mu1_exp, args.max_mu1_exp, args.n_mu1)
-        x_name, y_name = "--alpha", "--mu1"
+        zs = [args.mu2]
+        x_name, y_name, z_name = "--alpha", "--mu1", "--mu2"
         base_cmd.extend([
-            "--mu2", str(args.mu2),
             "--mcp_gamma", str(args.mcp_gamma),
             "--admm_mode", str(args.admm_mode),
             "--tol", str(args.tol),
